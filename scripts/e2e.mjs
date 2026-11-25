@@ -160,6 +160,52 @@ try {
     await viewer.screenshot({ path: join(shots, "e2e-viewer.png") });
   }
 
+  // Playback commands the host sends, to check that one action sends exactly one.
+  await host.evaluate(() => {
+    window.__sent = [];
+    const orig = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (d) {
+      const m = /"type":"(play|pause)"/.exec(typeof d === "string" ? d : "");
+      if (m) window.__sent.push(m[1]);
+      return orig.call(this, d);
+    };
+  });
+  const hostSent = () => host.evaluate(() => window.__sent.splice(0));
+
+  // A double-click on the picture is fullscreen only: it doesn't play and pause for everyone.
+  await host.locator("video").dblclick();
+  await sleep(1500);
+  if (await host.evaluate(() => !!document.fullscreenElement)) await host.evaluate(() => document.exitFullscreen());
+  check((await hostSent()).length === 0, "a double-click on the video sends no play or pause");
+  // A single click plays.
+  await host.locator("video").click();
+  await sleep(1500);
+  check((await hostSent()).join(",") === "play", "a single click on the video plays");
+  // Space while the play button has focus presses it once (not the button and the shortcut both).
+  await host.getByTitle("Pause (space)").click();
+  await sleep(1000);
+  await host.getByTitle("Play (space)").press(" ");
+  await sleep(1500);
+  const pressed = (await hostSent()).join(",");
+  check(pressed === "pause,play", `clicking the play button, then Space on it, toggles twice in all (${pressed})`);
+  await host.locator("body").press(" ");
+  await sleep(1500);
+  check((await hostSent()).join(",") === "pause", "Space elsewhere toggles once");
+
+  // Diagnostics (screen settings): a log of anchors, commands and player actions, downloaded as a text file.
+  await viewer.getByRole("button", { name: "Settings" }).click();
+  const [dl] = await Promise.all([viewer.waitForEvent("download"), viewer.getByRole("button", { name: "Download diagnostics" }).click()]);
+  const logText = readFileSync(await dl.path(), "utf8");
+  check(
+    /^# Kino web/m.test(logText) &&
+      /recv\s+anchor \{/.test(logText) &&
+      /player\s+(seek|play|pause)/.test(logText) &&
+      /video\s+seeked/.test(logText),
+    `diagnostics download has anchors, player actions and video events (${logText.split("\n").length} lines)`,
+  );
+  check(!logText.includes("my copy.webm"), "diagnostics don't contain local file names");
+  await viewer.locator(".dialog").getByRole("button", { name: "Done" }).click();
+
   // Media keys go through the screen: the OS media overlay shows the current item (C-12.10).
   const title = await host.evaluate(() => navigator.mediaSession?.metadata?.title ?? null);
   check(title === "Test Clip.webm", `media session shows the current item (${title})`);
@@ -250,9 +296,33 @@ try {
     }
   } else console.log("     (GIF search skipped: set KINO_GIPHY_KEY to test it)");
 
+  // A link the server refuses says so, instead of blaming the format.
+  await host.getByRole("button", { name: /^Playlist/ }).click();
+  await host.getByRole("button", { name: "＋ Link" }).click();
+  await host.getByPlaceholder("https://…").fill(`${theatre}/no-such-video.mp4`);
+  await host.locator(".dialog .actions .primary").click();
+  const badRow = host.locator(".side .list-item", { hasText: "no-such-video" });
+  await badRow.waitFor();
+  await badRow.getByTitle("Play now").click();
+  const refusedText = await host
+    .getByText(/The link answered 404/)
+    .first()
+    .waitFor({ timeout: 15_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(refusedText, 'a refused link says "The link answered 404…"');
+  await badRow.getByTitle("Remove").click();
+  await badRow.waitFor({ state: "detached" });
+  const clipRow = host.locator(".side .list-item", { hasText: "Test Clip" });
+  if (!(await clipRow.evaluate((e) => e.classList.contains("current")))) await clipRow.getByTitle("Play now").click();
+  await host.waitForFunction(() => document.querySelector(".side .list-item.current")?.textContent?.includes("Test Clip"), null, {
+    timeout: 10_000,
+  });
+
   // YouTube doesn't play in the web client yet, so web viewers report it ended at once and the screen moves on to the
   // next item by itself instead of waiting forever (C-14.8).
-  await host.getByRole("button", { name: /^Playlist/ }).click();
   await host.getByRole("button", { name: "＋ Link" }).click();
   await host.getByPlaceholder("https://…").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   await host.locator(".dialog .actions .primary").click();

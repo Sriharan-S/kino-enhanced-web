@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { diag, watchVideo } from "../core/diag";
 import { DIRECTORY_JOIN, youTubeId, youTubeWatchUrl } from "../core/media";
 import { load, store, type TheatreEntry } from "../core/net";
 import { expectedAt, type Item, Permissions, type ServerError } from "../core/protocol";
@@ -20,6 +21,9 @@ interface Props {
   playback: Html5Playback;
   onLeave: (reason?: string) => void;
 }
+
+/** How long a click on the video waits to see whether it becomes a double-click. */
+const DOUBLE_CLICK_MS = 250;
 
 export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const controller = useMemo(() => new MediaController(s, playback), [s, playback]);
@@ -54,7 +58,11 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
     const box = boxRef.current;
     if (!box) return;
     box.prepend(playback.video);
-    return () => playback.video.remove();
+    const unwatch = watchVideo(playback.video);
+    return () => {
+      unwatch();
+      playback.video.remove();
+    };
   }, [playback]);
 
   const toast = useCallback((text: string) => {
@@ -96,11 +104,15 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const canSkip = s.can(Permissions.PlaybackSkip);
   const item = s.currentItem;
 
-  const togglePlay = useCallback(() => {
-    if (!s.can(Permissions.PlaybackToggle) || !s.currentItem) return;
-    if (s.engine.anchor?.state === "playing") s.pause();
-    else s.play();
-  }, [s]);
+  const togglePlay = useCallback(
+    (via: string) => {
+      if (!s.can(Permissions.PlaybackToggle) || !s.currentItem) return;
+      diag.add("ui", `play/pause (${via})`);
+      if (s.engine.anchor?.state === "playing") s.pause();
+      else s.play();
+    },
+    [s],
+  );
 
   // Repeated presses add up even before the theatre's new anchor arrives.
   const pendingSeek = useRef<{ target: number; seq: number; at: number } | null>(null);
@@ -115,6 +127,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
           ? p.target + (a.state === "playing" ? (now - p.at) / 1000 : 0)
           : expectedAt(a, s.clock.theatreNowMs);
       const target = Math.max(0, base + delta);
+      diag.add("ui", `seek by ${delta} s → ${target.toFixed(2)}`);
       pendingSeek.current = { target, seq: a.seq, at: now };
       s.seek(target);
     },
@@ -126,14 +139,38 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
     else void stageRef.current?.requestFullscreen();
   }, []);
 
+  // A click on the picture plays or pauses, but only once it's clear it isn't the first half of a double-click
+  // (fullscreen): otherwise a double-click would send play and pause to everyone.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onVideoClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target !== playback.video) return;
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+      if (e.detail > 1) {
+        clickTimer.current = null;
+        return;
+      }
+      clickTimer.current = setTimeout(() => {
+        clickTimer.current = null;
+        togglePlay("click on the video");
+      }, DOUBLE_CLICK_MS);
+    },
+    [playback, togglePlay],
+  );
+  useEffect(() => () => void (clickTimer.current && clearTimeout(clickTimer.current)), []);
+
   // Keyboard shortcuts (ignored while typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t.closest("input, textarea, select, [contenteditable]") || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Space on a focused button presses that button (the play button included); toggling here too would flip
+      // playback twice.
+      if (e.key === " " && t.closest("button, a, summary, [role=button], [role=menuitem], [role=menuitemcheckbox], [role=tab]")) return;
       if (e.key === " " || e.key === "k") {
         e.preventDefault();
-        togglePlay();
+        if (e.repeat) return; // holding the key down mustn't flip playback back and forth
+        togglePlay(`key ${e.key === " " ? "space" : "k"}`);
       } else if (e.key === "f") fullscreen();
       else if (e.key === "m") playback.video.muted = !playback.video.muted;
       else if (e.key === "ArrowLeft") seekBy(-5);
@@ -221,7 +258,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
           </button>
         </div>
 
-        <div className="video-box" ref={boxRef} onDoubleClick={fullscreen} onClick={(e) => e.target === playback.video && togglePlay()}>
+        <div className="video-box" ref={boxRef} onDoubleClick={fullscreen} onClick={onVideoClick}>
           {hold && hold.length > 0 && (
             <div className="banner">
               <span>⏸ Waiting for {hold.join(", ")}</span>
@@ -336,7 +373,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
           canToggle={canToggle && !!item}
           canSeek={canSeek && !!item}
           canSkip={canSkip}
-          onToggle={togglePlay}
+          onToggle={() => togglePlay("play button")}
           onFullscreen={fullscreen}
         />
       </div>

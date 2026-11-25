@@ -23,6 +23,7 @@ import {
   can,
   isTimelineAuthority,
 } from "./protocol";
+import { diag, short } from "./diag";
 import { engineStep, GAP_MS, startTicker } from "./ticker";
 import { ClockSync, DEFAULT_SETTINGS, type Playback, StatusReporter, SyncEngine, type SyncSettings } from "./sync";
 
@@ -106,6 +107,7 @@ export class ScreenSession {
   private name = "";
   private lastTick = 0;
   private lastResync = 0;
+  private lastZone = "";
 
   code = "";
   joined: Welcome | null = null;
@@ -247,6 +249,11 @@ export class ScreenSession {
   }
 
   private applyWelcome(w: Welcome) {
+    diag.add(
+      "conn",
+      `welcome self=${w.self.id.slice(0, 6)} host=${w.self.isHost} item=${w.item?.id ?? "none"} anchor ${short(w.anchor)} ` +
+        `autoAdvance=${w.screen.autoAdvance} buffering=${w.screen.bufferingPolicy}`,
+    );
     this.joined = w;
     this.screen = w.screen;
     this.code = w.screen.code;
@@ -267,6 +274,7 @@ export class ScreenSession {
 
   private onConnectionClosed(conn: Connection, code: number, reason: string) {
     if (conn !== this.conn || this.disposed || this.loop === null) return; // stale, leaving or still joining
+    diag.add("conn", `closed ${code} ${reason}`);
     if (code === 4000 || code === 4001) {
       this.end(code === 4000 ? "replaced" : reason);
       return;
@@ -325,7 +333,49 @@ export class ScreenSession {
     this.engine.isHost = isTimelineAuthority(this.self);
   }
 
+  private lastViewersLog = "";
+
+  /** Diagnostics: everything that can move playback, and viewer statuses when they change. */
+  private logMessage(m: ServerMessage) {
+    switch (m.type) {
+      case "pong":
+      case "chat":
+      case "react":
+      case "roles":
+        return;
+      case "anchor":
+        diag.add("recv", `anchor ${short(m.data)} (theatre now ${Math.round(this.clock.theatreNowMs)})`);
+        return;
+      case "item":
+        diag.add("recv", `item ${m.data ? `${m.data.id} ${m.data.kind} duration=${m.data.duration}` : "none"}`);
+        return;
+      case "playlist":
+        diag.add("recv", `playlist ${m.data.map((i) => `${i.id}:${i.kind}:${i.duration}`).join(" ")}`);
+        return;
+      case "viewers": {
+        const line = m.data
+          .map(
+            (v) =>
+              `${v.id.slice(0, 6)}${v.isHost ? "(host)" : v.actingHost ? "(acting)" : ""}:${v.device}:${v.status ?? "?"}:${v.connected ? "on" : "away"}`,
+          )
+          .join(" ");
+        if (line !== this.lastViewersLog) diag.add("recv", `viewers ${line}`);
+        this.lastViewersLog = line;
+        return;
+      }
+      case "screen":
+        diag.add("recv", `screen autoAdvance=${m.data.autoAdvance} buffering=${m.data.bufferingPolicy}`);
+        return;
+      case "subs":
+        diag.add("recv", `subs ${m.data.length}`); // their names are file names
+        return;
+      default:
+        diag.add("recv", `${m.type} ${short(m.data, 200)}`);
+    }
+  }
+
   private onMessage(m: ServerMessage) {
+    this.logMessage(m);
     switch (m.type) {
       case "pong":
         this.clock.addSample(m.data.t0, m.data.ts, this.clock.localNowMs);
@@ -397,7 +447,10 @@ export class ScreenSession {
       await sleep(this.settings.burstIntervalMs);
     }
     await sleep(500); // let the last pongs arrive
-    if (this.clock.commit()) this.send("rtt", { value: Math.round(this.clock.rttMs * 10) / 10 });
+    if (this.clock.commit()) {
+      diag.add("clock", `offset=${this.clock.offset.toFixed(1)} ms rtt=${this.clock.rttMs.toFixed(1)} ms (${samples} samples)`);
+      this.send("rtt", { value: Math.round(this.clock.rttMs * 10) / 10 });
+    }
   }
 
   private tick() {
@@ -405,6 +458,15 @@ export class ScreenSession {
     const elapsed = now - this.lastTick;
     this.engine.tick(engineStep(elapsed));
     this.lastTick = now;
+    const st = this.engine.status;
+    if (st.zone !== this.lastZone) {
+      diag.add(
+        "sync",
+        `zone ${this.lastZone} → ${st.zone} drift=${st.drift.toFixed(3)} rate=${st.rate.toFixed(4)} host=${this.engine.isHost}`,
+      );
+      this.lastZone = st.zone;
+    }
+    if (elapsed > GAP_MS) diag.add("sync", `tick gap ${Math.round(elapsed)} ms`);
     if (!this.reconnecting) {
       // The device slept or the tab was frozen: the clock may have jumped, so re-sync it fully (§14.11).
       if (elapsed > GAP_MS) {
@@ -422,6 +484,7 @@ export class ScreenSession {
   }
 
   private send(type: string, data: unknown = {}) {
+    if (type !== "ping" && type !== "chat.send" && type !== "chat.gif") diag.add("send", `${type} ${short(data, 200)}`);
     this.conn?.send(type, data);
   }
 

@@ -24,7 +24,7 @@ each one lives in this repo, what tests cover it, the web-only work, and the pla
 - **Tests.** "unit" is Vitest in `test/`; "live" is `test/live.test.ts` against a theatre (`KINO_THEATRE`); "e2e" is
   `scripts/e2e.mjs` (two headless Chrome profiles); "UI: manual" means checked by hand only.
 
-Rows: ✅ 122 · 🟨 60 · ⬜ 105 · ⏸ 3 (every row below, platform-only items and the design phase included).
+Rows: ✅ 132 · 🟨 52 · ⬜ 105 · ⏸ 3 (every row below, platform-only items and the design phase included).
 
 Audited on 2026-11-25 at commit `298c94b`.
 
@@ -94,6 +94,15 @@ Found in this audit:
 
 Shared gaps that need theatre or spec work first (C-3.2 rename, C-4.8 now playing, C-6.11 who sees the code) are in the
 tables too.
+
+## Open bug reports
+
+Reported from hand checks and not yet explained. Each stays here until it's reproduced and fixed, or shown not to be a
+bug.
+
+| Reported | What happened | Status |
+|---|---|---|
+| 2026-11-26 | A web host playing a local MP4, with a Windows viewer and web viewers (Chrome on a PC and on Android) on other devices: the Windows viewer kept flipping between play and pause, and the web viewers jumped to 0:00 and back about every second. | Not reproduced: web host + Windows viewer + web viewer with an H.264/AAC MP4, a Windows host + web viewer, and a muted, minimised web host all stayed in sync. Next: a diagnostics file (WEB-19.8) from the host and a web viewer, and a Windows `--synclog`, from a session where it happens. Fixed on the way: a double-click on the picture sent play and pause, and Space on a focused button could toggle twice (WEB-12.7). |
 
 ## Order of work for the web
 
@@ -186,14 +195,14 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-5.7 | Snapshot on join | C-5.7 | ✅ | `core/session.ts:244-261` | live |
 | WEB-5.8 | Leave frees the seat at once | C-5.8 | ✅ | `core/session.ts:475-486`, `ui/App.tsx:188-193` | e2e (viewer leaves; the host's list updates); `pagehide` also leaves |
 | WEB-5.9 | 60 s reconnect grace, shown to others | C-5.9 | ✅ | `ui/ScreenView.tsx:477,496-497` | "reconnecting…", dimmed; UI: manual |
-| WEB-5.11 | Screen settings | C-5.11 | 🟨 | `ui/Settings.tsx` | Settings dialog (top bar): only changed fields are sent; follows `screen` while open; read-only with the reason without `screen.settings`; errors shown in the dialog. Unit (`settingsChanges`) and browser test; by-hand check pending |
-| WEB-5.11.1 | Rename the screen | C-5.11.1 | 🟨 | `ui/Settings.tsx` | 1–64 characters. browser test: the new name reaches the viewer; by-hand check pending |
-| WEB-5.11.2 | Visibility and password | C-5.11.2 | 🟨 | `ui/Settings.tsx` | Going private needs a password; an already private screen keeps its password unless a new one is given. Unit; by-hand check pending |
-| WEB-5.11.3 | Hide from lobby | C-5.11.3 | 🟨 | `ui/Settings.tsx` | Only when private; going public clears it. Unit; by-hand check pending |
-| WEB-5.11.4 | Max viewers | C-5.11.4 | 🟨 | `ui/Settings.tsx` | 2–25. Unit and browser test; by-hand check pending |
-| WEB-5.11.5 | Show devices | C-5.11.5 | 🟨 | `ui/Settings.tsx` | Unit; by-hand check pending |
+| WEB-5.11 | Screen settings | C-5.11 | ✅ | `ui/Settings.tsx` | Settings dialog (top bar): only changed fields are sent; follows `screen` while open; read-only with the reason without `screen.settings`; errors shown in the dialog. Unit (`settingsChanges`) and browser test |
+| WEB-5.11.1 | Rename the screen | C-5.11.1 | ✅ | `ui/Settings.tsx` | 1–64 characters. browser test: the new name reaches the viewer |
+| WEB-5.11.2 | Visibility and password | C-5.11.2 | ✅ | `ui/Settings.tsx` | Going private needs a password; an already private screen keeps its password unless a new one is given. Unit |
+| WEB-5.11.3 | Hide from lobby | C-5.11.3 | ✅ | `ui/Settings.tsx` | Only when private; going public clears it. Unit |
+| WEB-5.11.4 | Max viewers | C-5.11.4 | ✅ | `ui/Settings.tsx` | 2–25. Unit and browser test |
+| WEB-5.11.5 | Show devices | C-5.11.5 | ✅ | `ui/Settings.tsx` | Unit |
 | WEB-5.11.6 | Auto-advance | C-5.11.6 | ✅ | `ui/ScreenView.tsx:538-547` | Checkbox in the Playlist tab; UI: manual |
-| WEB-5.11.7 | Buffering policy | C-5.11.7 | 🟨 | `ui/Settings.tsx` | Keep playing or Wait for everyone. Unit; by-hand check pending |
+| WEB-5.11.7 | Buffering policy | C-5.11.7 | ✅ | `ui/Settings.tsx` | Keep playing or Wait for everyone. Unit |
 | WEB-5.13 | Close the screen | C-5.13 | 🟨 | `ui/Settings.tsx` | See WEB-5.13.1 and WEB-5.13.2; by-hand check pending |
 | WEB-5.13.1 | Host closes, with confirmation | C-5.13.1 | 🟨 | `ui/Settings.tsx` | "Close screen…" for the host only (not the acting host); asks "Close the screen for everyone?". browser test; by-hand check pending |
 | WEB-5.13.2 | Everyone else returns to the lobby with the reason | C-5.13.2 | ✅ | `ui/App.tsx`, `core/session.ts` (`finalMessage`) | Live test; shows the theatre's own reason ("The host closed the screen."); browser test |
@@ -246,7 +255,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-9.1 | Chat mute and unmute | C-9.1 | 🟨 | `ui/Viewers.tsx` | Chat-mute / Unmute chat; icon for everyone. browser test; by-hand check pending |
+| WEB-9.1 | Chat mute and unmute | C-9.1 | ✅ | `ui/Viewers.tsx` | Chat-mute / Unmute chat; icon for everyone. browser test |
 | WEB-9.2 | Kick | C-9.2 | 🟨 | `ui/Viewers.tsx` | browser test: kicked viewer back in the lobby with the reason, then rejoins; by-hand check pending |
 | WEB-9.3 | Ban | C-9.3 | 🟨 | `ui/Viewers.tsx` | Confirmation first. browser test: banned viewer removed and refused on rejoin; by-hand check pending |
 | WEB-9.4 | Viewer actions menu, filtered by rank and permission | C-9.4 | 🟨 | `ui/Viewers.tsx`, `core/rbac.ts` | ⋯ menu with only the actions you may take (rank and permission); "No actions available"; never for yourself. Unit and browser test; by-hand check pending |
@@ -296,7 +305,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-11.19.3 | Live tally | C-11.19.3 | 🟨 | `ui/Ready.tsx` (`readyTally`) | Among connected viewers. Unit and browser test; by-hand check pending |
 | WEB-11.19.4 | 30 s countdown | C-11.19.4 | 🟨 | `ui/Ready.tsx` | From the theatre's deadline. browser test; by-hand check pending |
 | WEB-11.19.5 | Result shown | C-11.19.5 | 🟨 | `ui/Ready.tsx` | For 5 s over the video; also in chat (from the theatre). browser test; by-hand check pending |
-| WEB-11.20 | Personal sync offset | C-11.20 | 🟨 | `ui/ScreenView.tsx` (`OffsetControl`) | ⏱ in the player bar, −2000 to +2000 ms, local only, remembered. browser test; by-hand check pending |
+| WEB-11.20 | Personal sync offset | C-11.20 | ✅ | `ui/ScreenView.tsx` (`OffsetControl`) | ⏱ in the player bar, −2000 to +2000 ms, local only, remembered. browser test |
 | WEB-11.21 | Sync readout for the viewer | C-11.21 | ✅ | `ui/ScreenView.tsx:413-417,442-467` | Zone, drift and rate in the controls bar; UI: manual |
 | WEB-11.22 | Shared sync test vectors across engines | C-11.22 | ⬜ |  |  |
 | WEB-11.23 | Sleep, lock and background behaviour | C-11.23 | ⬜ | `core/session.ts:191` | `setInterval` ticks are throttled in background tabs (WEB-11.P1) |
@@ -312,7 +321,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-12.4 | Seek bar with hover preview time | C-12.4 | ⬜ | `ui/ScreenView.tsx:380-398` | A plain range input |
 | WEB-12.5 | Audio track selection | C-12.5 | ⬜ |  | Not built (WEB-12.P4) |
 | WEB-12.6 | Fullscreen | C-12.6 | ✅ | `ui/ScreenView.tsx:106-109` | Button, F, double-click on the video; UI: manual |
-| WEB-12.7 | Keyboard shortcuts | C-12.7 | 🟨 | `ui/ScreenView.tsx:111-130` | Space/K, ←/→, J/L, M, F; missing ↑/↓, N/P and Home; ignored while typing or with Ctrl, Alt or Meta |
+| WEB-12.7 | Keyboard shortcuts | C-12.7 | 🟨 | `ui/ScreenView.tsx` | Space/K, ←/→, J/L, M, F; missing ↑/↓, N/P and Home; ignored while typing or with Ctrl, Alt or Meta. Space on a focused button presses only that button, and a held key doesn't repeat play/pause; a double-click on the picture is fullscreen only (it used to send play and pause). e2e |
 | WEB-12.8 | Touch gestures | C-12.8 | ⬜ |  | Not built |
 | WEB-12.9 | Buffering and end-of-file detection | C-12.9 | ✅ | `player/html5.ts:30-33` | `seeking`, or `readyState < HAVE_FUTURE_DATA` while playing |
 | WEB-12.10 | System media controls go through the screen | C-12.10 | ✅ | `ui/mediaSession.ts` | Media Session: play, pause, stop, next, previous, seek forward/back and seek-to go through the screen with the same permissions; metadata shows the item and screen. Browser test checks the metadata; media keys checked by hand |
@@ -364,6 +373,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-14.8 | End of a YouTube item: wait for everyone, host can skip | C-14.8 | 🟨 | `player/controller.ts` | Until YouTube plays (WEB-14.P1), the client sends `item.ended` at once and tells the viewer, so it never blocks the screen. Live test and browser test cover it. ✅ once `item.ended` is sent at the real end |
 | WEB-14.9 | YouTube titles | C-14.9 | ⬜ | `ui/ScreenView.tsx:683` | Named "YouTube {id}" |
 | WEB-14.10 | YouTube errors explained | C-14.10 | ⬜ |  | Not built |
+| WEB-14.11 | A link that won't play says why | C-14.11 | 🟨 | `player/controller.ts` (`linkProblem`, `probeLink`) | Names a refusal ("The link answered 403…"), a web page given as a video link, or a network error; otherwise says the server may refuse it or the format isn't supported, instead of blaming the format alone. Unit and e2e (a 404 link); by-hand check pending |
 | WEB-14.P1 | YouTube IFrame API in the browser | Platform-only (C-14.5) | ⬜ | `public/_headers`, `player/` | CSP needs `script-src https://www.youtube.com` (today `'self'`), or embed the directory's `/yt` page in a frame and talk to it with `postMessage`; sound needs a tap first |
 
 ## WEB-15. Codecs and formats
@@ -417,7 +427,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | ✅ | `core/chat.ts`, `ui/Chat.tsx` | User's own GIPHY key in local storage only. Unit (parse); browser test with `KINO_GIPHY_KEY` (not in CI); checked by hand |
 | WEB-18.5 | Pasted GIF links | C-18.5 | ✅ | `core/chat.ts` (`isGifLink`) | Same allow list as the theatre. Unit and browser test; checked by hand |
 | WEB-18.6 | System messages | C-18.6 | ✅ | `ui/Chat.tsx` | Browser test; checked by hand |
-| WEB-18.7 | Chat permissions and muted state | C-18.7 | 🟨 | `ui/Chat.tsx` | Permissions, mute and "Slow down a little" (browser test); mute by-hand check pending |
+| WEB-18.7 | Chat permissions and muted state | C-18.7 | ✅ | `ui/Chat.tsx` | Permissions, mute and "Slow down a little" (browser test); mute checked by hand |
 
 ## WEB-19. Notices, errors and resilience
 
@@ -430,6 +440,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-19.5 | `update_required` tells people to update | C-19.5 | ✅ | `ui/common.tsx:53-54` | "Reload the page" |
 | WEB-19.6 | Form errors shown where the form is | C-19.6 | ✅ | `ui/App.tsx:258-325`, `ui/Lobby.tsx:222-314` | Create, join, name and password dialogs; UI: manual |
 | WEB-19.7 | Progress for slow actions | C-19.7 | ✅ | `ui/App.tsx:225-231`, `player/controller.ts:175` | Busy dialog; "Reading n of m: name"; UI: manual |
+| WEB-19.8 | Diagnostics log anyone can save | C-19.8 | 🟨 | `core/diag.ts`, `ui/Settings.tsx` | "Download diagnostics" in Screen settings (viewers too): the last 3000 anchors, commands, clock syncs, sync zones, player actions and video events, as text; nothing uploaded, no file names. Unit and e2e; by-hand check pending |
 
 ## WEB-20. Builds, distribution and updates
 
@@ -584,3 +595,4 @@ the official YouTube IFrame player with Kino's own controls (WEB-14.5); a Kino-o
 - 2026-11-25: step 1 checked by hand (media keys, 30 minutes in a hidden tab): WEB-11.P1 ✅, WEB-12.10 ✅. Step 2 (chat, reactions, GIFs, system messages): WEB-18.1 to WEB-18.7 implemented with automated browser tests; 🟨 until checked by hand.
 - 2026-11-25: chat checked by hand (WEB-18.1 to WEB-18.6 ✅; WEB-18.7 waits for moderation). Step 3 (running a screen: settings, close, ready check, personal offset, invite panel, pasted links): implemented with unit and browser tests; 🟨 until checked by hand.
 - 2026-11-25: step 4 (people: viewer menu, mute, kick, ban, roles page, role assignment, overrides, co-hosts, handing over, device icons, ping bands): implemented with unit, live and browser tests; WEB-8.10 and WEB-9.5 ✅, the rest 🟨 until checked by hand.
+- 2026-11-26: checked by hand: screen settings (WEB-5.11, WEB-5.11.1 to WEB-5.11.5, WEB-5.11.7), personal offset (WEB-11.20) and chat mute (WEB-9.1, WEB-18.7) ✅. A mixed-platform sync report is under "Open bug reports". New: WEB-14.11 (a link that won't play says why; the failed links in the hand check answered 403) and WEB-19.8 (diagnostics download), both 🟨. WEB-12.7: a double-click on the picture no longer sends play and pause, and Space on a focused button no longer toggles twice.

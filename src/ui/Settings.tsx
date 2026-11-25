@@ -1,5 +1,6 @@
 // Screen settings (C-5.11) and closing the screen (C-5.13). Only changed fields are sent; every client follows `screen`.
 import { useEffect, useRef, useState } from "react";
+import { downloadDiagnostics } from "../core/diag";
 import { Permissions, type ScreenInfo } from "../core/protocol";
 import type { ScreenSession } from "../core/session";
 import { Dialog, describeError, useSubscribe } from "./common";
@@ -185,6 +186,28 @@ export function SettingsDialog({ session: s, onClose }: { session: ScreenSession
             {message.text}
           </p>
         )}
+        <div className="field">
+          Diagnostics
+          <span className="muted small">
+            A log of what this device received, sent and did with the video, for reporting a sync problem. It stays on this device until you
+            download it, and doesn't include file names.
+          </span>
+          <span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                downloadDiagnostics(`kino-diagnostics-${s.code}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`, [
+                  `Kino web (${document.querySelector<HTMLScriptElement>("script[type=module]")?.src.split("/").pop() ?? "dev"}) · ${navigator.userAgent}`,
+                  `screen ${s.code} · me ${s.self?.id.slice(0, 6)} (${s.isHost ? "host" : s.isTimelineAuthority ? "acting host" : "viewer"})`,
+                  `clock offset ${s.clock.offset.toFixed(1)} ms · rtt ${s.clock.rttMs.toFixed(1)} ms · personal offset ${s.engine.personalOffsetMs} ms`,
+                ])
+              }
+            >
+              Download diagnostics
+            </button>
+          </span>
+        </div>
         <div className="actions">
           {isOwner &&
             (confirmClose ? (
