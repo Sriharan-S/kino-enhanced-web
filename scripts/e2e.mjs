@@ -15,9 +15,15 @@ const muxer = readFileSync(new URL("../node_modules/webm-muxer/build/webm-muxer.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
+// In GitHub Actions, failures also become annotations, which anyone can read on the run page.
+const annotate = (text) =>
+  process.env.GITHUB_ACTIONS && console.log(`::error title=Browser test::${text.replace(/\r?\n/g, " ").slice(0, 900)}`);
 const check = (ok, what) => {
   console.log(`${ok ? "ok  " : "FAIL"} ${what}`);
-  if (!ok) failures++;
+  if (!ok) {
+    failures++;
+    annotate(`FAIL ${what}`);
+  }
 };
 
 const browser = await chromium.launch({ channel, headless: true, args: ["--autoplay-policy=no-user-gesture-required"] });
@@ -631,6 +637,9 @@ try {
     );
   check(told, 'the viewer returns to the lobby with "The host closed the screen."');
   check((await fetch(`${theatre}/resolve/${code2}`)).status === 404, "a closed screen's code no longer resolves");
+} catch (e) {
+  annotate(`stopped: ${e?.message ?? e}`);
+  throw e;
 } finally {
   await browser.close();
 }
