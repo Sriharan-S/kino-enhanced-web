@@ -10,7 +10,9 @@ Web and Windows viewers can share a screen: it's the same protocol, theatres and
 
 ## Status
 
-Early but working (README section 18 in the main repo). Done:
+Early but working. The full checklist, the gaps against the Windows app and the order of work are in
+**[`ROADMAP.md`](ROADMAP.md)**, which follows the
+[master roadmap](https://github.com/Sriharan-S/kino-enhanced/blob/main/ROADMAP.md). Done:
 
 - Theatre list (live, cached or bundled), parallel probes and the unified lobby with search, filters and sort
 - Create screens (public or private, hidden, max viewers, automatic or chosen theatre); join by lobby, code or invite link
