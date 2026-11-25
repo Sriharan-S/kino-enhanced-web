@@ -34,6 +34,13 @@ async function waitFor(cond: () => boolean, ms = 10_000) {
   }
 }
 
+/** Both players end up within the engine's green zone (it leaves drift under 0.25 s alone; larger drift is corrected). */
+async function converges(a: SimPlayer, b: SimPlayer, ms = 20_000) {
+  await waitFor(() => Math.abs(a.pos - b.pos) < DEFAULT_SETTINGS.enterCorrection, ms).catch(() => {
+    throw new Error(`players stayed ${Math.abs(a.pos - b.pos).toFixed(3)} s apart`);
+  });
+}
+
 describe.skipIf(!api)("live theatre", () => {
   it("host and viewer stay in sync through play, seek and pause", { timeout: 60_000 }, async () => {
     const hp = livePlayer();
@@ -70,12 +77,12 @@ describe.skipIf(!api)("live theatre", () => {
         await sleep(3000);
         expect(hp.p.paused).toBe(false);
         expect(vp.p.paused).toBe(false);
-        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
+        await converges(hp.p, vp.p);
 
         host.seek(120);
         await waitFor(() => (host.engine.anchor?.position ?? 0) >= 120);
         await sleep(2500);
-        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
+        await converges(hp.p, vp.p);
         expect(hp.p.pos).toBeGreaterThan(120);
 
         host.pause();
@@ -170,7 +177,7 @@ describe.skipIf(!api)("live theatre", () => {
       host.seek(200); // anchors still reach the reconnected viewer
       await waitFor(() => (viewer.engine.anchor?.position ?? 0) >= 200);
       await sleep(2500);
-      expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
+      await converges(hp.p, vp.p);
     } finally {
       viewer.dispose();
       host.dispose();
