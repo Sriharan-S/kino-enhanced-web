@@ -234,6 +234,41 @@ describe.skipIf(!api)("live theatre", () => {
     }
   });
 
+  it("a co-host stands in while the host is away and hands back when they return (C-7.4, C-7.7)", { timeout: 60_000 }, async () => {
+    const hostId = await identity();
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      hostId,
+      new SimPlayer(),
+      { name: "web acting host test", visibility: "public" },
+      "Host",
+    );
+    const resolved = (await api!.resolve(created.code))!;
+    const co = await ScreenSession.joinResolved(api!, await identity(), new SimPlayer(), resolved, "Co", null);
+    let back: ScreenSession | null = null;
+    try {
+      await waitFor(() => host.viewers.length === 2);
+      host.setCoHost(co.self!.id, true);
+      await waitFor(() => co.self?.coHost === 1);
+      expect(co.engine.isHost).toBe(false);
+
+      host.dispose(); // the host leaves
+      await waitFor(() => !!co.self?.actingHost);
+      expect(co.engine.isHost).toBe(true); // the acting host now leads the timeline
+      await waitFor(() => co.chat.some((m) => m.kind === "system" && /standing in/i.test(m.text ?? "")));
+
+      back = await ScreenSession.joinResolved(api!, hostId, new SimPlayer(), resolved, "Host", null); // same device: the owner
+      expect(back.isHost).toBe(true);
+      await waitFor(() => co.self?.actingHost === false);
+      expect(co.engine.isHost).toBe(false);
+      expect(co.self?.coHost).toBe(1);
+    } finally {
+      co.dispose();
+      back?.dispose();
+      host.dispose();
+    }
+  });
+
   it("reports a closed screen to its viewers", { timeout: 30_000 }, async () => {
     const { session: host, created } = await ScreenSession.create(
       api!,

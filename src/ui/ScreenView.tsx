@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTORY_JOIN, youTubeId, youTubeWatchUrl } from "../core/media";
 import { load, store, type TheatreEntry } from "../core/net";
-import { expectedAt, type Item, Permissions, type ServerError, type ViewerInfo } from "../core/protocol";
+import { expectedAt, type Item, Permissions, type ServerError } from "../core/protocol";
 import type { ScreenSession } from "../core/session";
 import { MediaController } from "../player/controller";
 import type { Html5Playback } from "../player/html5";
@@ -9,6 +9,8 @@ import { Dialog, describeError, formatTime, useSubscribe } from "./common";
 import { ChatPanel } from "./Chat";
 import { ReadyBanner } from "./Ready";
 import { SettingsDialog } from "./Settings";
+import { RolesDialog } from "./Roles";
+import { Ping, Viewers } from "./Viewers";
 import { bindMediaSession } from "./mediaSession";
 import { MAX_FLOATING_REACTIONS, REACTION_MS } from "../core/chat";
 
@@ -18,15 +20,6 @@ interface Props {
   playback: Html5Playback;
   onLeave: (reason?: string) => void;
 }
-
-const STATUS_TEXT: Record<string, string> = {
-  sync: "in sync",
-  catching: "catching up",
-  buffering: "buffering",
-  mismatch: "different file",
-  waiting: "waiting",
-  nofile: "no file",
-};
 
 export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const controller = useMemo(() => new MediaController(s, playback), [s, playback]);
@@ -41,6 +34,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const [dragging, setDragging] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -370,7 +364,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
         </div>
         <div className="side-body" style={{ display: tab === "chat" ? "none" : undefined }}>
           {tab === "viewers" ? (
-            <Viewers session={s} />
+            <Viewers session={s} onOpenRoles={() => setRolesOpen(true)} />
           ) : (
             <Playlist
               session={s}
@@ -383,6 +377,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
         </div>
       </aside>
 
+      {rolesOpen && <RolesDialog session={s} onClose={() => setRolesOpen(false)} />}
       {settingsOpen && s.screen && <SettingsDialog session={s} onClose={() => setSettingsOpen(false)} />}
       {inviteOpen && <InviteDialog session={s} theatre={theatre} onClose={() => setInviteOpen(false)} />}
       {linkOpen && (
@@ -459,6 +454,9 @@ function Controls(props: {
           {zoneText(st.zone)}
           {["inSync", "correcting", "host", "settling"].includes(st.zone) ? ` · ${driftMs >= 0 ? "+" : ""}${driftMs} ms` : ""}
           {st.rate !== 1 ? ` · ${(st.rate * 100).toFixed(1)}%` : ""}
+        </span>
+        <span className="sync-readout" title="Your ping to the theatre (updates after every clock sync)">
+          <Ping rtt={Number.isFinite(s.clock.rttMs) ? s.clock.rttMs : null} />
         </span>
         <button className="btn icon ghost" onClick={() => (v.muted = !v.muted)} title="Mute (m)">
           {v.muted || v.volume === 0 ? "🔇" : "🔊"}
@@ -576,48 +574,6 @@ function zoneText(zone: string) {
     default:
       return "";
   }
-}
-
-function Viewers({ session: s }: { session: ScreenSession }) {
-  const sorted = [...s.viewers].sort(
-    (a, b) => Number(b.isHost) - Number(a.isHost) || (a.coHost ?? 99) - (b.coHost ?? 99) || a.name.localeCompare(b.name),
-  );
-  const roleName = (id: string) => s.roles.find((r) => r.id === id);
-  return (
-    <div className="list">
-      {sorted.map((v: ViewerInfo) => (
-        <div key={v.id} className="list-item" style={{ opacity: v.connected === false ? 0.5 : 1 }}>
-          <div style={{ minWidth: 0 }}>
-            <div className="name">
-              {v.name}
-              {v.id === s.self?.id && <span className="badge">you</span>}
-              {v.isHost && <span className="badge host">host</span>}
-              {v.actingHost && <span className="badge host">acting host</span>}
-              {v.coHost != null && <span className="badge">co-host {v.coHost}</span>}
-              {v.muted && <span className="badge">muted</span>}
-              {(v.roles ?? []).map((id) => {
-                const r = roleName(id);
-                return r ? (
-                  <span key={id} className="badge" style={r.colour ? { color: r.colour, borderColor: r.colour } : undefined}>
-                    {r.name}
-                  </span>
-                ) : null;
-              })}
-            </div>
-            <div className="small muted">
-              {v.connected === false ? (
-                "reconnecting…"
-              ) : (
-                <span className={`st-${v.status ?? "sync"}`}>{STATUS_TEXT[v.status ?? "sync"]}</span>
-              )}
-              {s.screen?.showDevices && v.device ? ` · ${v.device}` : ""}
-              {v.rtt != null ? ` · ${Math.round(v.rtt)} ms` : ""}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function Playlist({

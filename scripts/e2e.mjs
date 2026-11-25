@@ -121,14 +121,14 @@ try {
   await sleep(8000);
   s = await both();
   check(s.gap < 0.08, `still in sync 8 s later: ${(s.gap * 1000).toFixed(0)} ms apart`);
-  const readout = await viewer.locator(".sync-readout").textContent();
+  const readout = await viewer.locator(".sync-readout").first().textContent();
   console.log(`     viewer readout: ${readout}`);
 
   // Personal offset (C-11.20): +500 ms makes this viewer's target 0.5 s later; it is remembered locally.
   await viewer.getByTitle("Personal sync offset").click();
   for (let i = 0; i < 10; i++) await viewer.getByRole("button", { name: "+50", exact: true }).click();
   await sleep(1500);
-  const offsetDrift = await viewer.locator(".sync-readout").textContent();
+  const offsetDrift = await viewer.locator(".sync-readout").first().textContent();
   const stored = await viewer.evaluate(() => localStorage.getItem("kino.offsetMs"));
   check(stored === "500", `offset remembered locally (${stored})`);
   const driftMs = Number(/([+-]\d+) ms/.exec(offsetDrift ?? "")?.[1] ?? "0");
@@ -347,6 +347,138 @@ try {
   check(oldGone && code2 !== oldCode, `the old code stops working (${oldCode} → ${code2})`);
   await host.locator(".dialog").getByRole("button", { name: "Done" }).click();
 
+  // People (step 4): the actions menu, roles, overrides, co-hosts and handing over the host role.
+  const menuFor = async (page, name) => {
+    await page.getByRole("button", { name: `Actions for ${name}` }).click();
+    return page.locator(".menu");
+  };
+  await host.getByRole("button", { name: /^Viewers/ }).click();
+  check((await host.locator(".viewer", { hasText: "Viewer" }).locator(".device-icon").count()) === 1, "viewer rows show a device icon");
+  check((await host.locator(".viewer .ping-good, .viewer .ping-fair, .viewer .ping-poor").count()) >= 1, "pings have colour bands");
+
+  // Chat mute (C-9.1, C-18.7).
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Chat-mute" }).click();
+  const mutedInput = await viewer
+    .waitForFunction(
+      () => document.querySelector("textarea[aria-label='Chat message']")?.placeholder === "You are muted in this screen.",
+      null,
+      { timeout: 10_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check(mutedInput, 'a muted viewer\'s chat input says "You are muted in this screen."');
+  const muteIcon = await host
+    .locator(".viewer", { hasText: "Viewer" })
+    .getByTitle("Chat-muted")
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(muteIcon, "the muted viewer shows the chat-muted icon");
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Unmute chat" }).click();
+  const unmuted = await viewer
+    .waitForFunction(() => !document.querySelector("textarea[aria-label='Chat message']")?.disabled, null, { timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(unmuted, "unmuting gives the input back");
+
+  // A new role with one permission, assigned from the menu (C-8.5.2, C-8.6).
+  await host.getByRole("button", { name: "Roles", exact: true }).click();
+  await host.getByRole("button", { name: "＋ New role" }).click();
+  await host.locator(".dialog label.field", { hasText: "Name" }).locator("input").fill("DJ");
+  await host.getByLabel("Add local files").check();
+  await host.locator(".dialog").getByRole("button", { name: "Create" }).click();
+  const listed = await host
+    .locator(".dialog .list-item", { hasText: "DJ" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(listed, "a new role appears on the roles page");
+  if (shots) await host.screenshot({ path: join(shots, "e2e-roles.png") });
+  await host.locator(".dialog").getByRole("button", { name: "Done" }).click();
+  await viewer.getByRole("button", { name: /^Playlist/ }).click();
+  check(await viewer.getByRole("button", { name: "＋ Files" }).isDisabled(), "a viewer can't add files by default");
+  await (await menuFor(host, "Viewer")).getByRole("menuitemcheckbox", { name: "DJ" }).click();
+  const canAdd = await viewer
+    .getByRole("button", { name: "＋ Files" })
+    .isEnabled({ timeout: 10_000 })
+    .then(async (e) => e || (await sleep(1500), viewer.getByRole("button", { name: "＋ Files" }).isEnabled()));
+  check(canAdd, "the assigned role's permission reaches the viewer (＋ Files enabled)");
+  check(
+    (await host.locator(".viewer", { hasText: "Viewer" }).locator(".badge.role", { hasText: "DJ" }).count()) === 1,
+    "the role shows on the viewer's row",
+  );
+
+  // A per-viewer override (C-8.7): deny chat.
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Permissions…" }).click();
+  await host.locator(".dialog").getByLabel("Send messages").selectOption("deny");
+  await host.locator(".dialog").getByRole("button", { name: "Save" }).click();
+  await viewer.getByRole("button", { name: /^Chat/ }).click();
+  const denied = await viewer
+    .waitForFunction(
+      () => document.querySelector("textarea[aria-label='Chat message']")?.placeholder === "You can't chat in this screen.",
+      null,
+      { timeout: 10_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check(denied, 'a Deny override takes chat away ("You can\'t chat in this screen.")');
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Permissions…" }).click();
+  await host.locator(".dialog").getByLabel("Send messages").selectOption("inherit");
+  await host.locator(".dialog").getByRole("button", { name: "Save" }).click();
+
+  // Co-host, then hand the host role over and back (C-7.1, C-7.8).
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Make co-host" }).click();
+  const co = await host
+    .locator(".viewer", { hasText: "Viewer" })
+    .locator(".badge", { hasText: "co-host #1" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(co, 'Make co-host shows "co-host #1"');
+  if (shots) {
+    await menuFor(host, "Viewer");
+    await host.screenshot({ path: join(shots, "e2e-viewers.png") });
+    await host.keyboard.press("Escape");
+  }
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Make host…" }).click();
+  check((await host.getByText("Make Viewer the host? You become co-host #1.").count()) === 1, "handing over asks first");
+  await host.locator(".dialog").getByRole("button", { name: "Make host", exact: true }).click();
+  await viewer.getByRole("button", { name: /^Viewers/ }).click();
+  const viewerIsHost = await viewer
+    .locator(".viewer", { hasText: "you" })
+    .locator(".badge.host", { hasText: "host" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(viewerIsHost, "the viewer is now the host");
+  await (await menuFor(viewer, "Host")).getByRole("menuitem", { name: "Make host…" }).click();
+  await viewer.locator(".dialog").getByRole("button", { name: "Make host", exact: true }).click();
+  const hostBack = await host
+    .locator(".viewer", { hasText: "you" })
+    .locator(".badge.host", { hasText: "host" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(hostBack, "and hands it back");
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Remove co-host" }).click();
+  await viewer.getByRole("button", { name: /^Chat/ }).click();
+
   // Viewer leaves; host sees it.
   await viewer.getByRole("button", { name: "Leave" }).click();
   await viewer.locator(".lobby").waitFor();
@@ -364,6 +496,56 @@ try {
       () => false,
     );
   check(rejoined, "a pasted invite link in the code box joins the screen");
+
+  // Kick (C-9.2): back to the lobby with the reason; they can come back.
+  await host.getByRole("button", { name: /^Viewers/ }).click();
+  await (await menuFor(host, "Viewer")).getByRole("menuitem", { name: "Kick" }).click();
+  const kicked = await viewer
+    .getByText("You were removed from the screen.")
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(kicked, 'a kicked viewer returns to the lobby with "You were removed from the screen."');
+  await viewer.getByLabel("Screen code or invite link").fill(`local/${code2}`);
+  await viewer.getByRole("button", { name: "Join", exact: true }).click();
+  check(
+    await viewer
+      .locator(".topbar")
+      .waitFor({ timeout: 15_000 })
+      .then(
+        () => true,
+        () => false,
+      ),
+    "a kicked viewer can rejoin",
+  );
+
+  // Ban (C-9.3), with a third browser: confirmed first, removed, and can't come back.
+  const guest = await open("Guest");
+  await guest.goto(`${app}/${q}#local/${code2}`);
+  await guest.locator(".topbar").waitFor({ timeout: 15_000 });
+  await (await menuFor(host, "Guest")).getByRole("menuitem", { name: "Ban…" }).click();
+  check((await host.getByText("Ban Guest from this screen? They can't come back.").count()) === 1, "banning asks first");
+  await host.locator(".dialog").getByRole("button", { name: "Ban", exact: true }).click();
+  const banned = await guest
+    .getByText("You are banned from this screen.")
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(banned, "a banned viewer is removed with the reason");
+  await guest.getByLabel("Screen code or invite link").fill(`local/${code2}`);
+  await guest.getByRole("button", { name: "Join", exact: true }).click();
+  const refused = await guest
+    .getByText("You can't join this screen.")
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(refused, "and can't rejoin");
 
   // The host closes the screen (C-5.13): it asks first; the viewer returns to the lobby with the reason.
   await host.getByRole("button", { name: "Settings", exact: true }).click();

@@ -769,3 +769,121 @@ fieldset.plain {
 .offset-pop p {
   margin: 0;
 }
+
+/* ---- Viewers, menus, roles ---- */
+
+.list-item.viewer.away {
+  opacity: 0.5;
+}
+.device-icon {
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--muted);
+}
+.ping {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ping-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.ping-good .ping-dot {
+  background: var(--ok);
+}
+.ping-fair .ping-dot {
+  background: var(--warn);
+}
+.ping-poor .ping-dot {
+  background: var(--bad);
+}
+.badge.role {
+  color: var(--text);
+}
+.role-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: 0;
+}
+.viewer-menu {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 210px;
+  padding: 4px;
+  display: grid;
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--panel-2);
+}
+.menu-item.danger {
+  color: var(--bad);
+}
+.menu-head {
+  padding: 6px 10px 2px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+.menu-note {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.menu-check {
+  display: inline-block;
+  width: 14px;
+}
+.swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.swatch.on {
+  border-color: var(--text);
+}
+.perm-group {
+  margin: 8px 0;
+}
+.perm-group .check {
+  margin: 4px 0;
+}
+.override-row {
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+}
+.btn.danger-fill {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}

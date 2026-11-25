@@ -24,7 +24,7 @@ each one lives in this repo, what tests cover it, the web-only work, and the pla
 - **Tests.** "unit" is Vitest in `test/`; "live" is `test/live.test.ts` against a theatre (`KINO_THEATRE`); "e2e" is
   `scripts/e2e.mjs` (two headless Chrome profiles); "UI: manual" means checked by hand only.
 
-Rows: ✅ 122 · 🟨 41 · ⬜ 124 · ⏸ 3 (every row below, platform-only items and the design phase included).
+Rows: ✅ 122 · 🟨 60 · ⬜ 105 · ⏸ 3 (every row below, platform-only items and the design phase included).
 
 Audited on 2026-11-25 at commit `298c94b`.
 
@@ -217,40 +217,40 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-7.1 | Appoint and remove co-hosts | C-7.1 | ⬜ | `core/session.ts:451-455` (API only) | No UI |
-| WEB-7.2 | Co-host priority order | C-7.2 | ⬜ | `core/session.ts:457-464` (API only) | No UI |
-| WEB-7.3 | Away co-hosts listed | C-7.3 | ⬜ |  | The `cohosts` list isn't shown |
-| WEB-7.4 | Acting host takes over the timeline | C-7.4 | 🟨 | `ui/ScreenView.tsx:483`, `core/session.ts:316-321` | "acting host" badge; the engine becomes timeline authority; no automated test |
-| WEB-7.5 | Acting host limits | C-7.5 | ⬜ |  | No host-only controls exist yet |
-| WEB-7.8 | Transfer ownership | C-7.8 | ⬜ | `core/session.ts:447` (API only) | No UI |
+| WEB-7.1 | Appoint and remove co-hosts | C-7.1 | 🟨 | `ui/Viewers.tsx`, `core/rbac.ts` | Host-only menu actions; the full ordered list is sent, away co-hosts kept. Unit and browser test; by-hand check pending |
+| WEB-7.2 | Co-host priority order | C-7.2 | 🟨 | `ui/Viewers.tsx` | Move up / Move down. Unit; by-hand check pending |
+| WEB-7.3 | Away co-hosts listed | C-7.3 | 🟨 | `ui/Viewers.tsx` | "Away: name (co-host #n)" from `cohosts`, with remove and reorder; by-hand check pending |
+| WEB-7.4 | Acting host takes over the timeline | C-7.4 | 🟨 | `core/session.ts` (`setViewers`) | "acting host" badge; the engine becomes the timeline authority. Live test `a co-host stands in while the host is away and hands back`; by-hand check pending |
+| WEB-7.5 | Acting host limits | C-7.5 | 🟨 | `core/rbac.ts` (`viewerActions`) | The acting host isn't offered co-host changes, ownership, closing, or actions on co-hosts. Unit; by-hand check pending |
+| WEB-7.8 | Transfer ownership | C-7.8 | 🟨 | `ui/Viewers.tsx` | "Make host…" with confirmation. browser test hands over and back; by-hand check pending |
 
 ## WEB-8. Roles and permissions
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
 | WEB-8.1 | Permission catalogue (19 permissions) | C-8.1 | ✅ | `core/protocol.ts:226-246` | Constants match the theatre |
-| WEB-8.2 | Role model and limits | C-8.2 | ⬜ |  | No roles UI |
+| WEB-8.2 | Role model and limits | C-8.2 | 🟨 | `ui/Roles.tsx` | Name 1–32, colour presets or none, rank 1 to your rank − 1; "New role" disabled at 20; by-hand check pending |
 | WEB-8.4 | Resolution order; effective permissions from the theatre | C-8.4 | ✅ | `core/protocol.ts:50` | Uses `ViewerInfo.permissions` only |
-| WEB-8.5 | Roles page | C-8.5 | ⬜ | `core/session.ts:436-440` (API only) | No roles page |
-| WEB-8.5.1 | List roles by rank, with colour | C-8.5.1 | ⬜ |  | Not built |
-| WEB-8.5.2 | Create a role | C-8.5.2 | ⬜ |  | Not built |
-| WEB-8.5.3 | Edit a role | C-8.5.3 | ⬜ |  | Not built |
-| WEB-8.5.4 | Delete a role | C-8.5.4 | ⬜ |  | Not built |
-| WEB-8.5.5 | Built-in roles: Viewer permissions only; Co-host read-only | C-8.5.5 | ⬜ |  | Not built |
-| WEB-8.6 | Assign roles to viewers | C-8.6 | ⬜ | `core/session.ts:441` (API only) | No UI |
-| WEB-8.7 | Per-viewer overrides: Inherit, Allow, Deny | C-8.7 | ⬜ | `core/session.ts:442` (API only) | No UI |
-| WEB-8.9 | Permission-aware UI | C-8.9 | 🟨 | `ui/ScreenView.tsx:75-78,524-527` | Playback, playlist, auto-advance and "New code" follow permissions; nothing else has UI |
-| WEB-8.10 | Roles shown in the viewer list | C-8.10 | ✅ | `ui/ScreenView.tsx:486-493` | Coloured chips (role colour on text and border); UI: manual |
+| WEB-8.5 | Roles page | C-8.5 | 🟨 | `ui/Roles.tsx` | Roles page from the Viewers tab; anyone can open it; theatre rejections shown on the page; by-hand check pending |
+| WEB-8.5.1 | List roles by rank, with colour | C-8.5.1 | 🟨 | `ui/Roles.tsx` | By rank with colour dot; locked roles marked; by-hand check pending |
+| WEB-8.5.2 | Create a role | C-8.5.2 | 🟨 | `ui/Roles.tsx` | Default rank just above your highest manageable role; only permissions you hold. browser test; by-hand check pending |
+| WEB-8.5.3 | Edit a role | C-8.5.3 | 🟨 | `ui/Roles.tsx`, `core/rbac.ts` (`roleAccess`) | Only roles below you. Unit; by-hand check pending |
+| WEB-8.5.4 | Delete a role | C-8.5.4 | 🟨 | `ui/Roles.tsx` | Custom roles below you, with confirmation. Unit; by-hand check pending |
+| WEB-8.5.5 | Built-in roles: Viewer permissions only; Co-host read-only | C-8.5.5 | 🟨 | `ui/Roles.tsx` | Viewer: permissions only. Co-host: read-only. Unit; by-hand check pending |
+| WEB-8.6 | Assign roles to viewers | C-8.6 | 🟨 | `ui/Viewers.tsx` | Role toggles in the viewer menu. Unit and browser test; by-hand check pending |
+| WEB-8.7 | Per-viewer overrides: Inherit, Allow, Deny | C-8.7 | 🟨 | `ui/Roles.tsx` (`OverridesDialog`) | Inherit (allowed / not allowed), Allow (disabled without it), Deny. browser test; by-hand check pending |
+| WEB-8.9 | Permission-aware UI | C-8.9 | 🟨 | `ui/*` | Everything with UI now follows the effective permissions; by-hand check pending |
+| WEB-8.10 | Roles shown in the viewer list | C-8.10 | ✅ | `ui/Viewers.tsx` | Role chips with a colour dot (C-23.3.1). browser test |
 
 ## WEB-9. Moderation
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-9.1 | Chat mute and unmute | C-9.1 | ⬜ | `core/session.ts:443` (API only) | "muted" badge shown; no action |
-| WEB-9.2 | Kick | C-9.2 | ⬜ | `core/session.ts:444` (API only) | No action |
-| WEB-9.3 | Ban | C-9.3 | ⬜ | `core/session.ts:445` (API only) | No action |
-| WEB-9.4 | Viewer actions menu, filtered by rank and permission | C-9.4 | ⬜ |  | No viewer menu |
-| WEB-9.5 | Being kicked or banned | C-9.5 | ✅ | `ui/common.tsx:43-50` | Back to the lobby: "You were removed from the screen" / "You can't join this screen"; UI: manual |
+| WEB-9.1 | Chat mute and unmute | C-9.1 | 🟨 | `ui/Viewers.tsx` | Chat-mute / Unmute chat; icon for everyone. browser test; by-hand check pending |
+| WEB-9.2 | Kick | C-9.2 | 🟨 | `ui/Viewers.tsx` | browser test: kicked viewer back in the lobby with the reason, then rejoins; by-hand check pending |
+| WEB-9.3 | Ban | C-9.3 | 🟨 | `ui/Viewers.tsx` | Confirmation first. browser test: banned viewer removed and refused on rejoin; by-hand check pending |
+| WEB-9.4 | Viewer actions menu, filtered by rank and permission | C-9.4 | 🟨 | `ui/Viewers.tsx`, `core/rbac.ts` | ⋯ menu with only the actions you may take (rank and permission); "No actions available"; never for yourself. Unit and browser test; by-hand check pending |
+| WEB-9.5 | Being kicked or banned | C-9.5 | ✅ | `ui/App.tsx` | Shows the theatre's reason ("You were removed from the screen." / "You are banned from this screen."); a refused rejoin says "You can't join this screen." browser test |
 
 ## WEB-10. Viewers panel: devices, latency and sync status
 
@@ -258,10 +258,10 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 |---|---|---|---|---|---|
 | WEB-10.1 | Viewer rows: name, you, host, acting host, co-host #n | C-10.1 | ✅ | `ui/ScreenView.tsx:469-509` | UI: manual |
 | WEB-10.2 | Device reported in `hello` | C-10.2 | ✅ | `core/session.ts:235` | `windows`, `web` (`linux`, `android` later) |
-| WEB-10.3 | Device icon per viewer | C-10.3 | 🟨 | `ui/ScreenView.tsx:501` | Words ("web", "windows") |
+| WEB-10.3 | Device icon per viewer | C-10.3 | 🟨 | `ui/Viewers.tsx` (`DeviceIcon`) | Icons with the platform name as tooltip and accessible name. browser test; by-hand check pending |
 | WEB-10.4 | Show devices off: no devices sent or shown | C-10.4 | ✅ | `ui/ScreenView.tsx:501` | UI: manual |
-| WEB-10.5 | Own latency, updated live | C-10.5 | ⬜ | `ui/ScreenView.tsx:413-417` | The readout shows zone, drift and rate, not RTT |
-| WEB-10.6 | Others' latency with colour bands | C-10.6 | 🟨 | `ui/ScreenView.tsx:502` | "45 ms" with no colour band |
+| WEB-10.5 | Own latency, updated live | C-10.5 | 🟨 | `ui/Viewers.tsx`, `ui/ScreenView.tsx` | "Your ping" in the Viewers tab and in the player bar, with bands; by-hand check pending |
+| WEB-10.6 | Others' latency with colour bands | C-10.6 | 🟨 | `ui/Viewers.tsx` (`Ping`), `core/rbac.ts` (`latencyBand`) | Green < 100 ms, yellow 100–250, red > 250, "–" when unknown. Unit; by-hand check pending |
 | WEB-10.7 | RTT reported after every clock sync | C-10.7 | ✅ | `core/session.ts:377-384` | live (after every burst) |
 | WEB-10.8 | Sync status per viewer (six states) | C-10.8 | ✅ | `ui/ScreenView.tsx:17-24,499` | Coloured words; UI: manual |
 | WEB-10.9 | Status reporter: on change only, buffering after 2 s | C-10.9 | ✅ | `core/sync.ts:426-473` | unit (`StatusReporter`) |
@@ -417,7 +417,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | ✅ | `core/chat.ts`, `ui/Chat.tsx` | User's own GIPHY key in local storage only. Unit (parse); browser test with `KINO_GIPHY_KEY` (not in CI); checked by hand |
 | WEB-18.5 | Pasted GIF links | C-18.5 | ✅ | `core/chat.ts` (`isGifLink`) | Same allow list as the theatre. Unit and browser test; checked by hand |
 | WEB-18.6 | System messages | C-18.6 | ✅ | `ui/Chat.tsx` | Browser test; checked by hand |
-| WEB-18.7 | Chat permissions and muted state | C-18.7 | 🟨 | `ui/Chat.tsx` | Input, GIF button and reactions follow permissions and mute, with "You can't chat in this screen" / "You are muted in this screen"; "Slow down a little" next to the input (browser test (`scripts/e2e.mjs`)). Mute can be exercised once moderation lands (WEB-9.1) |
+| WEB-18.7 | Chat permissions and muted state | C-18.7 | 🟨 | `ui/Chat.tsx` | Permissions, mute and "Slow down a little" (browser test); mute by-hand check pending |
 
 ## WEB-19. Notices, errors and resilience
 
@@ -583,3 +583,4 @@ the official YouTube IFrame player with Kino's own controls (WEB-14.5); a Kino-o
 - 2026-11-25: order-of-work step 1 ("stop harming others' screens"): WEB-3.7 ✅, WEB-4.11 ✅; WEB-4.3, WEB-4.4, WEB-11.P1, WEB-12.10 and WEB-14.8 to 🟨 (implemented and tested automatically; the notes say what is left). Theatre fix found on the way: closes without a code are now answered with 1000, so clients no longer wait about 10 s for the closing handshake.
 - 2026-11-25: step 1 checked by hand (media keys, 30 minutes in a hidden tab): WEB-11.P1 ✅, WEB-12.10 ✅. Step 2 (chat, reactions, GIFs, system messages): WEB-18.1 to WEB-18.7 implemented with automated browser tests; 🟨 until checked by hand.
 - 2026-11-25: chat checked by hand (WEB-18.1 to WEB-18.6 ✅; WEB-18.7 waits for moderation). Step 3 (running a screen: settings, close, ready check, personal offset, invite panel, pasted links): implemented with unit and browser tests; 🟨 until checked by hand.
+- 2026-11-25: step 4 (people: viewer menu, mute, kick, ban, roles page, role assignment, overrides, co-hosts, handing over, device icons, ping bands): implemented with unit, live and browser tests; WEB-8.10 and WEB-9.5 ✅, the rest 🟨 until checked by hand.

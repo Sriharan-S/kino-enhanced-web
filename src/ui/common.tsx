@@ -60,3 +60,27 @@ export function describeError(code: string | null | undefined, fallback: string)
       return fallback;
   }
 }
+
+/** A yes/no question with a danger-styled confirm button. */
+export function ConfirmDialog(props: { title: string; text: string; confirm: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <Dialog title={props.title} onClose={props.onCancel}>
+      <p>{props.text}</p>
+      <div className="actions">
+        <button type="button" className="btn" onClick={props.onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn primary danger-fill"
+          onClick={() => {
+            props.onConfirm();
+            props.onCancel();
+          }}
+        >
+          {props.confirm}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
