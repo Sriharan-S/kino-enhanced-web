@@ -8,6 +8,7 @@ import {
   type TheatreLobby,
   type TheatreNetwork,
   TheatreNetwork as Net,
+  probeProblem,
   type TheatreProbe,
 } from "../core/net";
 import type { CreateScreenRequest, LobbyScreen, ResolveResponse } from "../core/protocol";
@@ -141,7 +142,14 @@ export function Lobby({ network, name, onRename, onJoin, onJoinCode, onCreate, m
           <option value="ping">Lowest ping</option>
           <option value="name">Name</option>
         </select>
-        <button className="btn" onClick={() => void refresh()} title="Refresh">
+        <button
+          className="btn"
+          onClick={() => {
+            void refresh();
+            if (network) void network.probeAll().then(setProbes);
+          }}
+          title="Refresh"
+        >
           ↻
         </button>
       </div>
@@ -150,12 +158,13 @@ export function Lobby({ network, name, onRename, onJoin, onJoinCode, onCreate, m
         {(network?.theatres ?? []).map((t) => {
           const l = lobbies.find((x) => x.theatre.id === t.id);
           const p = probes.find((x) => x.theatre.id === t.id);
-          const ok = l ? !l.failure : !!p?.info;
+          const problem = p ? probeProblem(p) : l?.failure ? `unavailable (${l.failure})` : null;
+          const known = !!(l || p);
           return (
-            <span key={t.id} title={l?.failure ?? p?.failure ?? ""}>
-              <span className={`dot ${l || p ? (ok ? "ok" : "bad") : ""}`} />
+            <span key={t.id} title={problem ?? ""}>
+              <span className={`dot ${known ? (problem ? "bad" : "ok") : ""}`} />
               {t.name}
-              {pings[t.id] !== undefined ? ` · ${Math.round(pings[t.id]!)} ms` : l?.failure ? " · unreachable" : ""}
+              {problem ? ` · ${problem}` : pings[t.id] !== undefined ? ` · ${Math.round(pings[t.id]!)} ms` : ""}
             </span>
           );
         })}
@@ -237,7 +246,10 @@ function CreateDialog({
   const [maxViewers, setMaxViewers] = useState(10);
   const [theatreId, setTheatreId] = useState("");
   const fastest = Net.fastest(probes);
-  const ok = name.trim().length > 0 && (!priv || password.length > 0);
+  const probed = probes.length === network.theatres.length;
+  const noneUsable = probed && !fastest;
+  const chosen = theatreId ? probes.find((x) => x.theatre.id === theatreId) : undefined;
+  const ok = name.trim().length > 0 && (!priv || password.length > 0) && !noneUsable && !(chosen && probeProblem(chosen));
 
   return (
     <Dialog title="Create a screen" onClose={onCancel}>
@@ -288,18 +300,23 @@ function CreateDialog({
         <label className="field">
           Theatre
           <select className="input" value={theatreId} onChange={(e) => setTheatreId(e.target.value)}>
-            <option value="">Automatic{fastest ? ` (${fastest.theatre.name}, ${Math.round(fastest.rttMs ?? 0)} ms)` : ""}</option>
+            <option value="">
+              Automatic
+              {fastest ? ` (${fastest.theatre.name}, ${Math.round(fastest.rttMs ?? 0)} ms)` : probed ? "" : " (checking theatres…)"}
+            </option>
             {network.theatres.map((t) => {
               const p = probes.find((x) => x.theatre.id === t.id);
+              const problem = p ? probeProblem(p) : null;
               return (
-                <option key={t.id} value={t.id}>
+                <option key={t.id} value={t.id} disabled={!!problem}>
                   {t.name}
-                  {p?.rttMs != null ? ` (${Math.round(p.rttMs)} ms)` : p?.failure ? " (unreachable)" : ""}
+                  {problem ? ` (${problem})` : p?.rttMs != null ? ` (${Math.round(p.rttMs)} ms)` : ""}
                 </option>
               );
             })}
           </select>
         </label>
+        {noneUsable && <p className="error-text small">No theatre is available right now; try again in a moment.</p>}
         <div className="actions">
           <button type="button" className="btn" onClick={onCancel}>
             Cancel

@@ -16,6 +16,8 @@ export class MediaController {
   private loadingItemId: string | null = null;
   private objectUrl: string | null = null;
   private failed: { source: string; message: string } | null = null;
+  /** The YouTube item this client has already reported as ended. */
+  private endedSent: string | null = null;
   private unsubscribe: (() => void)[] = [];
   /** Shown in the UI while files are being read, or when an item can't play here. */
   notice: string | null = null;
@@ -80,7 +82,15 @@ export class MediaController {
     }
     if (item.kind === "youtube") {
       s.engine.loadedItemId = null;
-      this.error = "YouTube items don't play in the web client yet. Use Kino for Windows for this one.";
+      // The theatre moves on from a YouTube item when everyone has reached its end (C-14.8). This client can't play
+      // it yet, so it counts as finished at once and never holds the others up.
+      if (this.endedSent !== item.id) {
+        this.endedSent = item.id;
+        s.reportEnded(item.id);
+      }
+      this.error =
+        "YouTube videos don't play in the web client yet. The others keep watching, and you'll rejoin on the next item. " +
+        "Kino for Windows plays YouTube.";
       return;
     }
     let source: string | null = null;

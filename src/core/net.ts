@@ -124,11 +124,11 @@ export class TheatreApi {
   }
 
   async info(signal?: AbortSignal): Promise<TheatreInfo> {
-    return (await ensureOk(await fetchWithTimeout(this.url("/info"), {}, 5000, signal))).json();
+    return (await ensureOk(await fetchWithTimeout(this.url("/info"), {}, THEATRE_TIMEOUT_MS, signal))).json();
   }
 
   async lobby(signal?: AbortSignal): Promise<LobbyScreen[]> {
-    const body = (await (await ensureOk(await fetchWithTimeout(this.url("/lobby"), {}, 5000, signal))).json()) as {
+    const body = (await (await ensureOk(await fetchWithTimeout(this.url("/lobby"), {}, THEATRE_TIMEOUT_MS, signal))).json()) as {
       screens?: LobbyScreen[];
     };
     return body.screens ?? [];
@@ -144,7 +144,7 @@ export class TheatreApi {
   }
 
   async resolve(code: string, signal?: AbortSignal): Promise<ResolveResponse | null> {
-    const res = await fetchWithTimeout(this.url(`/resolve/${encodeURIComponent(code)}`), {}, 5000, signal);
+    const res = await fetchWithTimeout(this.url(`/resolve/${encodeURIComponent(code)}`), {}, THEATRE_TIMEOUT_MS, signal);
     if (res.status === 404) return null;
     return (await ensureOk(res)).json();
   }
@@ -180,6 +180,9 @@ export class TheatreApi {
   }
 }
 
+/** Per-theatre request timeout, so one slow theatre never holds up the rest (§10.4). */
+export const THEATRE_TIMEOUT_MS = 3000;
+
 export const MAX_SUBTITLE_BYTES = 1024 * 1024;
 
 async function gzip(data: Uint8Array): Promise<Uint8Array> {
@@ -196,8 +199,16 @@ export interface TheatreProbe {
   failure: string | null;
 }
 
-export const isUsable = (p: TheatreProbe) =>
-  !!p.info && p.info.status === "ok" && p.info.minProtocol <= PROTOCOL_VERSION && PROTOCOL_VERSION <= p.info.protocol;
+/** Why a theatre can't be used right now, or null if it can (C-4.3, C-4.4). */
+export function probeProblem(p: TheatreProbe): string | null {
+  if (!p.info) return p.failure ? `unavailable (${p.failure})` : "unavailable";
+  if (p.info.minProtocol > PROTOCOL_VERSION) return "needs a newer version of Kino (reload the page)";
+  if (p.info.protocol < PROTOCOL_VERSION) return "out of date (runs an older protocol)";
+  if (p.info.status !== "ok") return `unavailable (${p.info.status})`;
+  return null;
+}
+
+export const isUsable = (p: TheatreProbe) => probeProblem(p) === null;
 
 export interface TheatreLobby {
   theatre: TheatreEntry;

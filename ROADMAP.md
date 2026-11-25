@@ -24,7 +24,7 @@ each one lives in this repo, what tests cover it, the web-only work, and the pla
 - **Tests.** "unit" is Vitest in `test/`; "live" is `test/live.test.ts` against a theatre (`KINO_THEATRE`); "e2e" is
   `scripts/e2e.mjs` (two headless Chrome profiles); "UI: manual" means checked by hand only.
 
-Rows: ✅ 110 · 🟨 33 · ⬜ 144 · ⏸ 3 (every row below, platform-only items and the design phase included).
+Rows: ✅ 112 · 🟨 34 · ⬜ 141 · ⏸ 3 (every row below, platform-only items and the design phase included).
 
 Audited on 2026-11-25 at commit `298c94b`.
 
@@ -147,7 +147,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-3.4 | Per-screen token | C-3.4 | ✅ | `core/identity.ts:31-33` | live (every session joins with it) |
 | WEB-3.5 | Reconnect restores everything | C-3.5 | ✅ | `core/session.ts:273-308` | live (`private screens need the password; members rejoin without it`) |
 | WEB-3.6 | Host ownership by owner token (one-time claim) | C-3.6 | ✅ | `core/session.ts:161-166` | live |
-| WEB-3.7 | Automatic reconnect after a network drop | C-3.7 | 🟨 | `core/session.ts:28-29,273-308` | Delays 300 ms, 1 s, 2 s, 3 s, 5 s for 60 s; asks `/resolve` to tell a closed screen from a network failure. Re-syncs with 3 samples, not 8. No automated test of the loop |
+| WEB-3.7 | Automatic reconnect after a network drop | C-3.7 | ✅ | `core/session.ts` (`reconnectLoop`) | Delays 300 ms, 1 s, 2 s, 3 s, 5 s for 60 s; asks `/resolve` to tell a closed screen from a network failure; full 8-sample clock burst after the reconnect. Live test: `reconnects silently after a network drop` |
 | WEB-3.8 | One live session per viewer | C-3.8 | ✅ | `core/session.ts:265-267` | "You joined this screen from another tab or device" |
 | WEB-3.9 | Profiles: separate identities on one device | C-3.9 | ✅ | `ui/App.tsx:14`, `core/identity.ts:15` | `?profile=<name>`; UI: manual |
 | WEB-3.P1 | Warn before a second tab of the same profile replaces the first | Platform-only | ⬜ |  | `BroadcastChannel`; offer "Use this tab instead" or a new profile |
@@ -159,14 +159,14 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 |---|---|---|---|---|---|
 | WEB-4.1 | Theatre list: live, then cached, then bundled | C-4.1 | ✅ | `core/net.ts:20-79` | unit (`theatre directory`). Cache `kino.servers`; 4 s directory timeout |
 | WEB-4.2 | Parallel `/info` probes and theatre latency | C-4.2 | 🟨 | `core/net.ts:228-246` | No automated test of `probeAll` or `fastest` |
-| WEB-4.3 | Incompatible theatres are unusable, and say why | C-4.3 | 🟨 | `core/net.ts:199-200` | `isUsable` keeps it out of Automatic, but it can be picked by name, with no hint |
-| WEB-4.4 | Unavailable theatres greyed out and not usable for create | C-4.4 | 🟨 | `ui/Lobby.tsx:149-162,288-301` | Unreachable theatres can still be chosen in Create (labelled "unreachable"); the lobby strip shows a dot and "unreachable" when `/lobby` fails |
+| WEB-4.3 | Incompatible theatres are unusable, and say why | C-4.3 | 🟨 | `core/net.ts` (`probeProblem`), `ui/Lobby.tsx` | Lobby strip and Create say "needs a newer version of Kino (reload the page)"; unit-tested. UI not yet checked by hand |
+| WEB-4.4 | Unavailable theatres greyed out and not usable for create | C-4.4 | 🟨 | `ui/Lobby.tsx` | Unusable theatres are disabled in Create with the reason; Create is blocked with "No theatre is available right now" when none is usable; Refresh re-measures pings. UI not yet checked by hand |
 | WEB-4.5 | Create suggests the fastest usable theatre | C-4.5 | ✅ | `ui/Lobby.tsx:239,291` | "Automatic (name, ping)" preselected; UI: manual |
 | WEB-4.6 | Unified lobby across theatres | C-4.6 | ✅ | `core/net.ts:248-316` | unit (`mergeLobbies`) |
 | WEB-4.7 | Listing fields | C-4.7 | ✅ | `ui/Lobby.tsx:174-191` | Theatre name as text; UI: manual |
 | WEB-4.8 | "Now playing" in the listing (host setting) | C-4.8 | ⬜ |  | Not in the protocol yet |
 | WEB-4.10 | Refresh and ping cadence | C-4.10 | 🟨 | `ui/Lobby.tsx:37-49,144` | Refresh fetches `/lobby` only; pings are measured once, when the lobby mounts |
-| WEB-4.11 | Partial results with a 3 s per-theatre timeout | C-4.11 | 🟨 | `core/net.ts:127-135` | `/info` and `/lobby` time out after 5 s, not 3 s |
+| WEB-4.11 | Partial results with a 3 s per-theatre timeout | C-4.11 | ✅ | `core/net.ts` (`THEATRE_TIMEOUT_MS`) | 3 s for `/info`, `/lobby` and `/resolve` |
 | WEB-4.12 | Sort, filter and search | C-4.12 | ✅ | `core/net.ts:320-342` | unit (`unified lobby`) |
 | WEB-4.13 | Loading and empty states | C-4.13 | ✅ | `ui/Lobby.tsx:164-172` | UI: manual |
 | WEB-4.14 | Full screens shown as full and not joinable | C-4.14 | ✅ | `ui/Lobby.tsx:175-177` | unit (full screens sort last); full rows are disabled |
@@ -300,7 +300,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-11.21 | Sync readout for the viewer | C-11.21 | ✅ | `ui/ScreenView.tsx:413-417,442-467` | Zone, drift and rate in the controls bar; UI: manual |
 | WEB-11.22 | Shared sync test vectors across engines | C-11.22 | ⬜ |  |  |
 | WEB-11.23 | Sleep, lock and background behaviour | C-11.23 | ⬜ | `core/session.ts:191` | `setInterval` ticks are throttled in background tabs (WEB-11.P1) |
-| WEB-11.P1 | Keep the engine ticking in background tabs | Platform-only (C-11.23) | ⬜ | `core/session.ts:191` | Options: a Worker timer, `requestVideoFrameCallback` while visible, catch-up on `visibilitychange`; must meet C-11.23 AC 2 |
+| WEB-11.P1 | Keep the engine ticking in background tabs | Platform-only (C-11.23) | 🟨 | `core/ticker.ts`, `core/ticker.worker.ts`, `core/session.ts` (`tick`) | Ticks come from a dedicated worker (falls back to `setInterval`); the engine step is capped at 1 s; a gap over 3 s runs a full clock burst. Verified the worker loads under the production CSP. Still to do: the 30-minute hidden-tab check (C-11.23 AC 2) by hand, and an automated gap test |
 
 ## WEB-12. Media player
 
@@ -315,7 +315,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-12.7 | Keyboard shortcuts | C-12.7 | 🟨 | `ui/ScreenView.tsx:111-130` | Space/K, ←/→, J/L, M, F; missing ↑/↓, N/P and Home; ignored while typing or with Ctrl, Alt or Meta |
 | WEB-12.8 | Touch gestures | C-12.8 | ⬜ |  | Not built |
 | WEB-12.9 | Buffering and end-of-file detection | C-12.9 | ✅ | `player/html5.ts:30-33` | `seeking`, or `readyState < HAVE_FUTURE_DATA` while playing |
-| WEB-12.10 | System media controls go through the screen | C-12.10 | ⬜ |  | Media keys act on the `<video>` and the engine undoes them |
+| WEB-12.10 | System media controls go through the screen | C-12.10 | 🟨 | `ui/mediaSession.ts` | Media Session: play, pause, stop, next, previous, seek forward/back and seek-to go through the screen with the same permissions; metadata shows the item and screen. Browser test checks the metadata. Media keys not yet tried by hand |
 | WEB-12.11 | Keep the display awake while playing | C-12.11 | ⬜ |  | No Wake Lock |
 | WEB-12.P1 | Autoplay policy: "Click to start" when the browser blocks playback | Platform-only | ✅ | `player/html5.ts:41-43`, `ui/ScreenView.tsx:274-280` | UI: manual |
 | WEB-12.P2 | Phone and tablet browsers | Platform-only | ⬜ | `ui/styles.css:535-550` | iOS Safari: `volume` is read-only (hide the slider), only the `<video>` can go fullscreen (`webkitEnterFullscreen`), a tap is needed for sound; Android Chrome; layouts from 320 px |
@@ -361,7 +361,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-14.5 | YouTube player | C-14.5 | ⬜ | `player/controller.ts:81-85` | "YouTube items don't play in the web client yet. Use Kino for Windows for this one." |
 | WEB-14.6 | YouTube sync rules | C-14.6 | 🟨 | `core/sync.ts:53-62` | `YOUTUBE_SETTINGS` exists in `core/sync.ts`, unused |
 | WEB-14.7 | Ads and YouTube buffering count as buffering | C-14.7 | ⬜ |  | Not built |
-| WEB-14.8 | End of a YouTube item: wait for everyone, host can skip | C-14.8 | ⬜ | `core/session.ts:416` (never called) | Never sends `item.ended`, so a web viewer holds every YouTube item at its end until someone presses Next |
+| WEB-14.8 | End of a YouTube item: wait for everyone, host can skip | C-14.8 | 🟨 | `player/controller.ts` | Until YouTube plays (WEB-14.P1), the client sends `item.ended` at once and tells the viewer, so it never blocks the screen. Live test and browser test cover it. ✅ once `item.ended` is sent at the real end |
 | WEB-14.9 | YouTube titles | C-14.9 | ⬜ | `ui/ScreenView.tsx:683` | Named "YouTube {id}" |
 | WEB-14.10 | YouTube errors explained | C-14.10 | ⬜ |  | Not built |
 | WEB-14.P1 | YouTube IFrame API in the browser | Platform-only (C-14.5) | ⬜ | `public/_headers`, `player/` | CSP needs `script-src https://www.youtube.com` (today `'self'`), or embed the directory's `/yt` page in a frame and talk to it with `postMessage`; sound needs a tap first |
@@ -580,3 +580,4 @@ the official YouTube IFrame player with Kino's own controls (WEB-14.5); a Kino-o
 ## Changelog of this roadmap
 
 - 2026-11-25: first version, generated from the master roadmap after a full audit of the code and tests at `298c94b`.
+- 2026-11-25: order-of-work step 1 ("stop harming others' screens"): WEB-3.7 ✅, WEB-4.11 ✅; WEB-4.3, WEB-4.4, WEB-11.P1, WEB-12.10 and WEB-14.8 to 🟨 (implemented and tested automatically; the notes say what is left). Theatre fix found on the way: closes without a code are now answered with 1000, so clients no longer wait about 10 s for the closing handshake.

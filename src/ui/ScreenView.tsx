@@ -6,6 +6,7 @@ import type { ScreenSession } from "../core/session";
 import { MediaController } from "../player/controller";
 import type { Html5Playback } from "../player/html5";
 import { Dialog, describeError, formatTime, useSubscribe } from "./common";
+import { bindMediaSession } from "./mediaSession";
 
 interface Props {
   session: ScreenSession;
@@ -58,6 +59,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
 
   useEffect(() => {
     playback.onPlayBlocked = () => setBlocked(true);
+    const unbindMedia = bindMediaSession(s, () => s.screen?.name ?? "Kino");
     const offs = [
       s.closed.on((reason) => onLeave(reason)),
       s.error.on((e: ServerError) => toast(describeError(e.code, e.message))),
@@ -67,6 +69,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
     playback.video.addEventListener("playing", onPlaying);
     return () => {
       offs.forEach((o) => o());
+      unbindMedia();
       playback.onPlayBlocked = null;
       playback.video.removeEventListener("playing", onPlaying);
     };

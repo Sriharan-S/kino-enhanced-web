@@ -144,6 +144,37 @@ try {
     await viewer.screenshot({ path: join(shots, "e2e-viewer.png") });
   }
 
+  // Media keys go through the screen: the OS media overlay shows the current item (C-12.10).
+  const title = await host.evaluate(() => navigator.mediaSession?.metadata?.title ?? null);
+  check(title === "Test Clip.webm", `media session shows the current item (${title})`);
+
+  // YouTube doesn't play in the web client yet, so web viewers report it ended at once and the screen moves on to the
+  // next item by itself instead of waiting forever (C-14.8).
+  await host.getByRole("button", { name: /^Playlist/ }).click();
+  await host.getByRole("button", { name: "＋ Link" }).click();
+  await host.getByPlaceholder("https://…").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  await host.locator(".dialog .actions .primary").click();
+  const ytRow = host.locator(".side .list-item", { hasText: "YouTube" });
+  await ytRow.waitFor();
+  await ytRow.getByTitle("Move up").click();
+  await host.waitForFunction(() => document.querySelector(".side .list-item")?.textContent?.includes("YouTube"), null, { timeout: 10_000 });
+  await ytRow.getByTitle("Play now").click();
+  const advanced = await host
+    .waitForFunction(
+      () => {
+        const cur = document.querySelector(".side .list-item.current")?.textContent ?? "";
+        return cur.includes("Test Clip") && document.querySelector("video").currentTime < 3;
+      },
+      null,
+      { timeout: 15_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check(advanced, "a YouTube item doesn't hold up a screen of web viewers: it moved on to the next item");
+  await host.getByRole("button", { name: /^Viewers/ }).click();
+
   // Viewer leaves; host sees it.
   await viewer.getByRole("button", { name: "Leave" }).click();
   await viewer.locator(".lobby").waitFor();

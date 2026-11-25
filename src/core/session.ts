@@ -23,6 +23,7 @@ import {
   can,
   isTimelineAuthority,
 } from "./protocol";
+import { engineStep, GAP_MS, startTicker } from "./ticker";
 import { ClockSync, DEFAULT_SETTINGS, type Playback, StatusReporter, SyncEngine, type SyncSettings } from "./sync";
 
 export const RECONNECT_WINDOW_MS = 60_000;
@@ -96,7 +97,9 @@ export class ScreenSession {
   readonly clock = new ClockSync();
   readonly engine: SyncEngine;
   private conn: Connection | null = null;
-  private loop: ReturnType<typeof setInterval> | null = null;
+  /** Stops the engine's ticker; null while joining and after leaving. */
+  private loop: (() => void) | null = null;
+  private bursting = false;
   private status = new StatusReporter();
   private disposed = false;
   private token = "";
@@ -188,7 +191,7 @@ export class ScreenSession {
       await this.pingBurst(this.settings.burstSamples);
       this.engine.enabled = true;
       this.lastTick = this.lastResync = this.clock.localNowMs;
-      this.loop = setInterval(() => this.tick(), this.settings.tickMs);
+      this.loop = startTicker(this.settings.tickMs, () => this.tick());
     } catch (e) {
       this.dispose();
       throw e;
@@ -281,7 +284,7 @@ export class ScreenSession {
         const welcome = await this.connect(null, null);
         this.reconnecting = false;
         this.applyWelcome(welcome);
-        void this.pingBurst(this.settings.resyncSamples);
+        void this.pingBurst(this.settings.burstSamples); // full burst after a reconnect (§14.3)
         return;
       } catch (e) {
         if (this.disposed) return;
@@ -375,6 +378,16 @@ export class ScreenSession {
   }
 
   private async pingBurst(samples: number) {
+    if (this.bursting) return;
+    this.bursting = true;
+    try {
+      await this.runBurst(samples);
+    } finally {
+      this.bursting = false;
+    }
+  }
+
+  private async runBurst(samples: number) {
     for (let i = 0; i < samples; i++) {
       this.send("ping", { t0: this.clock.localNowMs });
       await sleep(this.settings.burstIntervalMs);
@@ -385,9 +398,15 @@ export class ScreenSession {
 
   private tick() {
     const now = this.clock.localNowMs;
-    this.engine.tick((now - this.lastTick) / 1000);
+    const elapsed = now - this.lastTick;
+    this.engine.tick(engineStep(elapsed));
     this.lastTick = now;
     if (!this.reconnecting) {
+      // The device slept or the tab was frozen: the clock may have jumped, so re-sync it fully (§14.11).
+      if (elapsed > GAP_MS) {
+        this.lastResync = now;
+        void this.pingBurst(this.settings.burstSamples);
+      }
       const status = this.status.update(this.engine.status.zone, this.fileMismatch, now);
       if (status) this.send("status", { value: status });
       if (now - this.lastResync >= this.settings.resyncEveryMs) {
@@ -471,12 +490,23 @@ export class ScreenSession {
     return this.api.downloadSubtitle(this.code, this.token, sub.id);
   }
 
+  /** Test hook: drops the connection the way a network failure would, which should trigger a silent reconnect. */
+  simulateNetworkDrop() {
+    const c = this.conn;
+    if (!c) return;
+    const closed = c.onClosed;
+    c.onClosed = () => {};
+    c.onMessage = () => {};
+    c.close();
+    closed(1006, "network drop (simulated)");
+  }
+
   /** Leaves the screen; `leave` first so the theatre frees the seat at once (no reconnect grace). */
   dispose(sendLeave = true) {
     if (this.disposed) return;
     this.disposed = true;
     if (sendLeave && this.loop !== null) this.send("leave");
-    if (this.loop !== null) clearInterval(this.loop);
+    this.loop?.();
     this.loop = null;
     this.engine.enabled = false;
     const c = this.conn;

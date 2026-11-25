@@ -135,6 +135,83 @@ describe.skipIf(!api)("live theatre", () => {
     }
   });
 
+  it("reconnects silently after a network drop and keeps playing in sync (C-3.7)", { timeout: 60_000 }, async () => {
+    const hp = livePlayer();
+    const vp = livePlayer();
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      await identity(),
+      hp.p,
+      { name: "web reconnect test", visibility: "public" },
+      "Host",
+    );
+    const viewer = await ScreenSession.joinResolved(api!, await identity(), vp.p, (await api!.resolve(created.code))!, "Viewer", null);
+    try {
+      host.load({ kind: "local", name: "Test.mkv", duration: 600 });
+      await waitFor(() => viewer.currentItem !== null && host.currentItem !== null);
+      for (const p of [hp.p, vp.p]) p.length = 600;
+      host.play();
+      await waitFor(() => viewer.engine.anchor?.state === "playing");
+      await sleep(2000);
+
+      let closed = "";
+      viewer.closed.on((r) => (closed = r));
+      const selfId = viewer.self!.id;
+      viewer.simulateNetworkDrop();
+      await waitFor(() => viewer.reconnecting);
+      await sleep(1000);
+      expect(vp.p.paused).toBe(false); // keeps playing on the last anchor while offline
+      await waitFor(() => !viewer.reconnecting, 20_000);
+      expect(closed).toBe("");
+      expect(viewer.self?.id).toBe(selfId); // same seat, same viewer
+      expect(host.viewers.filter((v) => v.name === "Viewer")).toHaveLength(1);
+
+      host.seek(200); // anchors still reach the reconnected viewer
+      await waitFor(() => (viewer.engine.anchor?.position ?? 0) >= 200);
+      await sleep(2500);
+      expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+    } finally {
+      viewer.dispose();
+      host.dispose();
+      hp.stop();
+      vp.stop();
+    }
+  });
+
+  it("YouTube items end once every viewer reports the end (C-14.8)", { timeout: 30_000 }, async () => {
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      await identity(),
+      new SimPlayer(),
+      { name: "web yt end test", visibility: "public" },
+      "Host",
+    );
+    const viewer = await ScreenSession.joinResolved(
+      api!,
+      await identity(),
+      new SimPlayer(),
+      (await api!.resolve(created.code))!,
+      "Viewer",
+      null,
+    );
+    try {
+      host.addToPlaylist([
+        { kind: "youtube", name: "A video", duration: null, url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+        { kind: "local", name: "Next.mkv", duration: 60 },
+      ]);
+      await waitFor(() => viewer.currentItem?.kind === "youtube");
+      const yt = viewer.currentItem!.id;
+      host.reportEnded(yt);
+      await sleep(800);
+      expect(viewer.currentItem?.id).toBe(yt); // still waiting for the viewer
+      viewer.reportEnded(yt);
+      await waitFor(() => viewer.currentItem?.name === "Next.mkv");
+    } finally {
+      viewer.dispose();
+      host.dispose();
+    }
+  });
+
   it("reports a closed screen to its viewers", { timeout: 30_000 }, async () => {
     const { session: host, created } = await ScreenSession.create(
       api!,
