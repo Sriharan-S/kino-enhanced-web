@@ -1,0 +1,9 @@
+// Kino for the web: static files only, served by a static-assets Worker (free, unlimited requests).
+{
+  "name": "kino-web",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

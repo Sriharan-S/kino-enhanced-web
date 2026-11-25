@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, format, unit tests, build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run format:check
+      - run: npm test
+      - run: npx vite build
+
+  live:
+    name: Live theatre and browser tests
+    runs-on: ubuntu-24.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the theatre (main repo)
+        uses: actions/checkout@v4
+        with:
+          repository: Sriharan-S/kino-enhanced
+          path: kino
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kino/theatre/package-lock.json
+      - run: npm ci
+      - name: Start a local theatre
+        working-directory: kino/theatre
+        run: |
+          npm ci
+          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8787/info > /dev/null && exit 0; sleep 1; done
+          cat wrangler.log; exit 1
+      - name: Live session tests
+        run: npm test
+        env:
+          KINO_THEATRE: http://127.0.0.1:8787
+      - name: Browser test (two headless Chrome profiles)
+        run: |
+          npx vite build
+          npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ > /dev/null && break; sleep 1; done
+          node scripts/e2e.mjs http://localhost:4173 http://127.0.0.1:8787
+        env:
+          KINO_BROWSER: chrome
+      - if: failure()
+        run: cat kino/theatre/wrangler.log preview.log || true

@@ -1,0 +1,163 @@
+// End-to-end against a real theatre: KINO_THEATRE=http://127.0.0.1:8787 npm test
+// (start one with `npx wrangler dev` in the main repo's theatre/). Skipped when KINO_THEATRE isn't set.
+import { describe, expect, it } from "vitest";
+import { DeviceIdentity } from "../src/core/identity";
+import { TheatreApi, TheatreError } from "../src/core/net";
+import { expectedAt } from "../src/core/protocol";
+import { ScreenSession } from "../src/core/session";
+import { SimPlayer } from "./sim";
+
+const url = process.env.KINO_THEATRE;
+const api = url ? new TheatreApi({ id: "local", name: "Local", url }) : null;
+
+/** A sim player advanced in real time, so the engine sees real clock behaviour. */
+function livePlayer() {
+  const p = new SimPlayer();
+  p.seekLatencyS = 0.05;
+  let last = performance.now();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    p.advance((now - last) / 1000);
+    last = now;
+  }, 10);
+  return { p, stop: () => clearInterval(timer) };
+}
+
+const identity = () => DeviceIdentity.fromSecret(crypto.getRandomValues(new Uint8Array(32)));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function waitFor(cond: () => boolean, ms = 10_000) {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error("timed out waiting");
+    await sleep(50);
+  }
+}
+
+describe.skipIf(!api)("live theatre", () => {
+  it("host and viewer stay in sync through play, seek and pause", { timeout: 60_000 }, async () => {
+    const hp = livePlayer();
+    const vp = livePlayer();
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      await identity(),
+      hp.p,
+      { name: "web live test", visibility: "public" },
+      "Host",
+    );
+    try {
+      expect(host.isHost).toBe(true);
+      const resolved = await api!.resolve(created.code);
+      const viewer = await ScreenSession.joinResolved(api!, await identity(), vp.p, resolved!, "Viewer", null);
+      try {
+        expect(viewer.self?.device).toBe("web");
+        await waitFor(() => host.viewers.length === 2);
+
+        host.load({ kind: "local", name: "Test.mkv", duration: 600 });
+        await waitFor(() => viewer.currentItem?.name === "Test.mkv" && host.currentItem !== null);
+        const itemId = host.currentItem!.id;
+        for (const [s, p] of [
+          [host, hp.p],
+          [viewer, vp.p],
+        ] as const) {
+          s.engine.requireLoadedItem = true;
+          s.engine.loadedItemId = itemId;
+          p.length = 600;
+        }
+
+        host.play();
+        await waitFor(() => viewer.engine.anchor?.state === "playing");
+        await sleep(3000);
+        expect(hp.p.paused).toBe(false);
+        expect(vp.p.paused).toBe(false);
+        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+
+        host.seek(120);
+        await waitFor(() => (host.engine.anchor?.position ?? 0) >= 120);
+        await sleep(2500);
+        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+        expect(hp.p.pos).toBeGreaterThan(120);
+
+        host.pause();
+        await waitFor(() => viewer.engine.anchor?.state === "paused");
+        await sleep(800);
+        const a = viewer.engine.anchor!;
+        expect(vp.p.paused).toBe(true);
+        expect(Math.abs(vp.p.pos - expectedAt(a, 0))).toBeLessThan(0.06);
+
+        // Statuses reach everyone.
+        await waitFor(() => host.viewers.every((v) => v.status === "sync")).catch((e) => {
+          throw new Error(
+            `${e} ${JSON.stringify(host.viewers.map((v) => [v.name, v.status]))} ${viewer.engine.status.zone} ${host.engine.status.zone}`,
+          );
+        });
+
+        // Chat round trip.
+        let got = "";
+        viewer.chatReceived.on((m) => (got = m.text ?? ""));
+        host.sendChat("hello from the host");
+        await waitFor(() => got === "hello from the host");
+      } finally {
+        viewer.dispose();
+      }
+      await waitFor(() => host.viewers.length === 1);
+    } finally {
+      host.dispose();
+      hp.stop();
+      vp.stop();
+    }
+  });
+
+  it("private screens need the password; members rejoin without it", { timeout: 30_000 }, async () => {
+    const hp = livePlayer();
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      await identity(),
+      hp.p,
+      { name: "web private test", visibility: "private", password: "pw1" },
+      "Host",
+    );
+    try {
+      const resolved = (await api!.resolve(created.code))!;
+      expect(resolved.requiresPassword).toBe(true);
+      const id = await identity();
+      await expect(ScreenSession.joinResolved(api!, id, new SimPlayer(), resolved, "Guest", "nope")).rejects.toMatchObject({
+        code: "wrong_password",
+      });
+      const guest = await ScreenSession.joinResolved(api!, id, new SimPlayer(), resolved, "Guest", "pw1");
+      guest.dispose();
+      await sleep(300);
+      const again = await ScreenSession.joinResolved(api!, id, new SimPlayer(), resolved, "Guest", null);
+      expect(again.self?.name).toBe("Guest");
+      again.dispose();
+    } finally {
+      host.dispose();
+      hp.stop();
+    }
+  });
+
+  it("reports a closed screen to its viewers", { timeout: 30_000 }, async () => {
+    const { session: host, created } = await ScreenSession.create(
+      api!,
+      await identity(),
+      new SimPlayer(),
+      { name: "web close test", visibility: "public" },
+      "Host",
+    );
+    const viewer = await ScreenSession.joinResolved(
+      api!,
+      await identity(),
+      new SimPlayer(),
+      (await api!.resolve(created.code))!,
+      "Viewer",
+      null,
+    );
+    let reason = "";
+    viewer.closed.on((r) => (reason = r));
+    host.closeScreen();
+    await waitFor(() => reason !== "");
+    expect(reason).toBe("closed");
+    host.dispose();
+    expect(await api!.resolve(created.code)).toBeNull();
+    await expect(api!.createScreen({ name: "", visibility: "public" })).rejects.toBeInstanceOf(TheatreError);
+  });
+});
