@@ -124,6 +124,22 @@ try {
   const readout = await viewer.locator(".sync-readout").textContent();
   console.log(`     viewer readout: ${readout}`);
 
+  // Personal offset (C-11.20): +500 ms makes this viewer's target 0.5 s later; it is remembered locally.
+  await viewer.getByTitle("Personal sync offset").click();
+  for (let i = 0; i < 10; i++) await viewer.getByRole("button", { name: "+50", exact: true }).click();
+  await sleep(1500);
+  const offsetDrift = await viewer.locator(".sync-readout").textContent();
+  const stored = await viewer.evaluate(() => localStorage.getItem("kino.offsetMs"));
+  check(stored === "500", `offset remembered locally (${stored})`);
+  const driftMs = Number(/([+-]\d+) ms/.exec(offsetDrift ?? "")?.[1] ?? "0");
+  check(
+    Math.abs(driftMs + 500) < 150 || /Catching|Jumping|Settling/.test(offsetDrift ?? ""),
+    `offset applied to the target (${offsetDrift})`,
+  );
+  await viewer.getByRole("button", { name: "Reset", exact: true }).click();
+  await viewer.getByTitle("Personal sync offset").click();
+  await sleep(4000);
+
   // Statuses reach the host.
   const statuses = await host.locator(".side .list-item").allTextContents();
   console.log(`     host's viewer list: ${statuses.join(" | ")}`);
@@ -261,11 +277,108 @@ try {
   check(advanced, "a YouTube item doesn't hold up a screen of web viewers: it moved on to the next item");
   await host.getByRole("button", { name: /^Viewers/ }).click();
 
+  // Screen settings (C-5.11): the host renames and limits the screen; every client follows; viewers see them read-only.
+  await host.getByRole("button", { name: "Settings", exact: true }).click();
+  await host.locator(".dialog label.field", { hasText: "Name" }).locator("input").fill("Browser e2e renamed");
+  await host.locator(".dialog label.field", { hasText: "Max viewers" }).locator("input").fill("5");
+  await host.locator(".dialog").getByRole("button", { name: "Save" }).click();
+  const renamed = await viewer
+    .locator(".topbar .title", { hasText: "Browser e2e renamed" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(renamed, "a renamed screen shows the new name for the viewer");
+  await host.locator(".dialog").getByRole("button", { name: "Done" }).click();
+  await viewer.getByRole("button", { name: "Settings", exact: true }).click();
+  const readOnly = (await viewer.getByText("Only the host or someone with permission can change these.").count()) > 0;
+  const nameEditable = await viewer.locator(".dialog label.field", { hasText: "Name" }).locator("input").isEditable();
+  check(readOnly && !nameEditable, "viewers without permission see the settings read-only");
+  await viewer.locator(".dialog").getByRole("button", { name: "Done" }).click();
+
+  // Ready check (C-11.19): the host asks, the viewer sees the tally and answers, the result shows.
+  await host.getByRole("button", { name: "Ready check" }).click();
+  const prompt = await viewer
+    .locator(".banner", { hasText: "asks: ready?" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  const tally = prompt ? await viewer.locator(".banner", { hasText: "asks: ready?" }).textContent() : "";
+  check(prompt && /1 of 2 ready · \d+ s/.test(tally ?? ""), `viewer sees the prompt with a tally and countdown (${tally?.trim()})`);
+  await viewer.locator(".banner").getByRole("button", { name: "Ready", exact: true }).click();
+  const everyone = await host
+    .locator(".banner", { hasText: "Everyone is ready" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(everyone, 'the result "Everyone is ready" shows when all have answered');
+
+  // Invite (C-6.9, C-6.10): copy code and a sharing sentence; a new code needs confirming and reaches every client.
+  const oldCode = (await host.locator(".topbar .badge.mono").textContent()).trim();
+  await host.getByRole("button", { name: "Invite" }).click();
+  const sentence = await host.locator(".dialog label.field", { hasText: "Message to share" }).locator("input").inputValue();
+  check(
+    sentence.includes(oldCode) && sentence.startsWith("Join my screen on Kino:"),
+    "the invite panel has a sharing sentence with the code",
+  );
+  check((await host.getByRole("button", { name: "Copy code" }).count()) === 1, "the invite panel can copy the code");
+  await host.getByRole("button", { name: "New code…" }).click();
+  check((await host.getByText("The old code and links stop working").count()) === 1, "a new code asks for confirmation first");
+  await host.locator(".dialog .actions").getByRole("button", { name: "New code", exact: true }).click();
+  const newCodeShown = await viewer
+    .waitForFunction((old) => (document.querySelector(".topbar .badge.mono")?.textContent ?? old).trim() !== old, oldCode, {
+      timeout: 10_000,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(newCodeShown, "the new code reaches the viewer");
+  await host.waitForFunction((old) => document.querySelector(".topbar .badge.mono")?.textContent?.trim() !== old, oldCode, {
+    timeout: 10_000,
+  });
+  const code2 = (await host.locator(".topbar .badge.mono").textContent()).trim();
+  const oldGone = (await fetch(`${theatre}/resolve/${oldCode}`)).status === 404;
+  check(oldGone && code2 !== oldCode, `the old code stops working (${oldCode} → ${code2})`);
+  await host.locator(".dialog").getByRole("button", { name: "Done" }).click();
+
   // Viewer leaves; host sees it.
   await viewer.getByRole("button", { name: "Leave" }).click();
   await viewer.locator(".lobby").waitFor();
   await host.waitForFunction(() => document.querySelectorAll(".side .list-item").length === 1, null, { timeout: 10_000 });
   check(true, "viewer left and the host's list updated");
+
+  // Pasting an invite link into the code box joins that screen (C-6.2).
+  await viewer.getByLabel("Screen code or invite link").fill(`https://kino-directory.srie.workers.dev/join#local/${code2.toLowerCase()}`);
+  await viewer.getByRole("button", { name: "Join", exact: true }).click();
+  const rejoined = await viewer
+    .locator(".topbar")
+    .waitFor({ timeout: 15_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(rejoined, "a pasted invite link in the code box joins the screen");
+
+  // The host closes the screen (C-5.13): it asks first; the viewer returns to the lobby with the reason.
+  await host.getByRole("button", { name: "Settings", exact: true }).click();
+  await host.getByRole("button", { name: "Close screen…" }).click();
+  check((await host.getByText("Close the screen for everyone?").count()) === 1, "closing asks first");
+  await host.getByRole("button", { name: "Close it" }).click();
+  const told = await viewer
+    .getByText("The host closed the screen.")
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(told, 'the viewer returns to the lobby with "The host closed the screen."');
+  check((await fetch(`${theatre}/resolve/${code2}`)).status === 404, "a closed screen's code no longer resolves");
 } finally {
   await browser.close();
 }

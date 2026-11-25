@@ -121,6 +121,8 @@ export class ScreenSession {
   coHosts: CoHostInfo[] = [];
   self: ViewerInfo | null = null;
   reconnecting = false;
+  /** Why the theatre ended the session, in its words, when it said (shown in the lobby). */
+  finalMessage: string | null = null;
   /** Set by the app when this viewer's file differs from the host's; reported as "mismatch". */
   fileMismatch = false;
 
@@ -369,7 +371,9 @@ export class ScreenSession {
         this.code = m.data.code;
         break;
       case "error":
-        this.error.emit(m.data);
+        // The theatre explains a final rejection just before closing (e.g. "the host closed the screen").
+        if (["closed", "kicked", "banned"].includes(m.data.code)) this.finalMessage = m.data.message;
+        else this.error.emit(m.data);
         return;
       default:
         return;

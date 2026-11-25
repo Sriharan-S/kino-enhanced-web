@@ -101,13 +101,13 @@ export function Lobby({ network, name, onRename, onJoin, onJoinCode, onCreate, m
         >
           <input
             className="input code-input"
-            placeholder="CODE"
-            maxLength={6}
+            placeholder="CODE or link"
+            maxLength={300}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/[^0-9a-z]/gi, ""))}
-            aria-label="Screen code"
+            onChange={(e) => setCode(e.target.value)}
+            aria-label="Screen code or invite link"
           />
-          <button className="btn" disabled={!network || code.length !== 6}>
+          <button className="btn" disabled={!network || !code.trim()}>
             Join
           </button>
         </form>

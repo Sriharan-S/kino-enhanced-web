@@ -24,7 +24,7 @@ each one lives in this repo, what tests cover it, the web-only work, and the pla
 - **Tests.** "unit" is Vitest in `test/`; "live" is `test/live.test.ts` against a theatre (`KINO_THEATRE`); "e2e" is
   `scripts/e2e.mjs` (two headless Chrome profiles); "UI: manual" means checked by hand only.
 
-Rows: ✅ 114 · 🟨 38 · ⬜ 135 · ⏸ 3 (every row below, platform-only items and the design phase included).
+Rows: ✅ 122 · 🟨 41 · ⬜ 124 · ⏸ 3 (every row below, platform-only items and the design phase included).
 
 Audited on 2026-11-25 at commit `298c94b`.
 
@@ -186,30 +186,30 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-5.7 | Snapshot on join | C-5.7 | ✅ | `core/session.ts:244-261` | live |
 | WEB-5.8 | Leave frees the seat at once | C-5.8 | ✅ | `core/session.ts:475-486`, `ui/App.tsx:188-193` | e2e (viewer leaves; the host's list updates); `pagehide` also leaves |
 | WEB-5.9 | 60 s reconnect grace, shown to others | C-5.9 | ✅ | `ui/ScreenView.tsx:477,496-497` | "reconnecting…", dimmed; UI: manual |
-| WEB-5.11 | Screen settings | C-5.11 | 🟨 | `core/session.ts:423-434` | Only auto-advance has a control; `session.updateSettings` supports every field |
-| WEB-5.11.1 | Rename the screen | C-5.11.1 | ⬜ |  | No control |
-| WEB-5.11.2 | Visibility and password | C-5.11.2 | ⬜ |  | No control |
-| WEB-5.11.3 | Hide from lobby | C-5.11.3 | ⬜ |  | No control |
-| WEB-5.11.4 | Max viewers | C-5.11.4 | ⬜ |  | No control |
-| WEB-5.11.5 | Show devices | C-5.11.5 | ⬜ |  | No control |
+| WEB-5.11 | Screen settings | C-5.11 | 🟨 | `ui/Settings.tsx` | Settings dialog (top bar): only changed fields are sent; follows `screen` while open; read-only with the reason without `screen.settings`; errors shown in the dialog. Unit (`settingsChanges`) and browser test; by-hand check pending |
+| WEB-5.11.1 | Rename the screen | C-5.11.1 | 🟨 | `ui/Settings.tsx` | 1–64 characters. browser test: the new name reaches the viewer; by-hand check pending |
+| WEB-5.11.2 | Visibility and password | C-5.11.2 | 🟨 | `ui/Settings.tsx` | Going private needs a password; an already private screen keeps its password unless a new one is given. Unit; by-hand check pending |
+| WEB-5.11.3 | Hide from lobby | C-5.11.3 | 🟨 | `ui/Settings.tsx` | Only when private; going public clears it. Unit; by-hand check pending |
+| WEB-5.11.4 | Max viewers | C-5.11.4 | 🟨 | `ui/Settings.tsx` | 2–25. Unit and browser test; by-hand check pending |
+| WEB-5.11.5 | Show devices | C-5.11.5 | 🟨 | `ui/Settings.tsx` | Unit; by-hand check pending |
 | WEB-5.11.6 | Auto-advance | C-5.11.6 | ✅ | `ui/ScreenView.tsx:538-547` | Checkbox in the Playlist tab; UI: manual |
-| WEB-5.11.7 | Buffering policy | C-5.11.7 | ⬜ |  | No control |
-| WEB-5.13 | Close the screen | C-5.13 | 🟨 | `core/session.ts:448` | Receiving `closed` works; the host has no Close button |
-| WEB-5.13.1 | Host closes, with confirmation | C-5.13.1 | ⬜ | `core/session.ts:448` (API only) | No button |
-| WEB-5.13.2 | Everyone else returns to the lobby with the reason | C-5.13.2 | ✅ | `ui/App.tsx:161-169` | live (`reports a closed screen to its viewers`) |
+| WEB-5.11.7 | Buffering policy | C-5.11.7 | 🟨 | `ui/Settings.tsx` | Keep playing or Wait for everyone. Unit; by-hand check pending |
+| WEB-5.13 | Close the screen | C-5.13 | 🟨 | `ui/Settings.tsx` | See WEB-5.13.1 and WEB-5.13.2; by-hand check pending |
+| WEB-5.13.1 | Host closes, with confirmation | C-5.13.1 | 🟨 | `ui/Settings.tsx` | "Close screen…" for the host only (not the acting host); asks "Close the screen for everyone?". browser test; by-hand check pending |
+| WEB-5.13.2 | Everyone else returns to the lobby with the reason | C-5.13.2 | ✅ | `ui/App.tsx`, `core/session.ts` (`finalMessage`) | Live test; shows the theatre's own reason ("The host closed the screen."); browser test |
 | WEB-5.P1 | Back/forward cache: a restored page rejoins or shows the lobby | Platform-only | ⬜ | `ui/App.tsx:188-193` | `pagehide` disposes the session; `pageshow` with `persisted` isn't handled |
 
 ## WEB-6. Invites and private screens
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-6.2 | Code entry: normalised, and accepts a pasted link | C-6.2 | 🟨 | `ui/Lobby.tsx:101-108`, `core/media.ts:111` | Strips non-alphanumerics and normalises I/L/O, but the 6-character box can't take a pasted link |
+| WEB-6.2 | Code entry: normalised, and accepts a pasted link | C-6.2 | 🟨 | `ui/Lobby.tsx`, `ui/App.tsx` | Spaces and dashes ignored; a pasted invite link joins that screen on that theatre. browser test; by-hand check pending |
 | WEB-6.3 | Invite link formats | C-6.3 | ✅ | `core/media.ts:113-125` | unit (`invite links`) |
 | WEB-6.5 | Join by code across every theatre | C-6.5 | ✅ | `core/net.ts:263-284`, `ui/App.tsx:106-141` | Parallel, first match wins, counts unreachable theatres; the parallel search has no test |
 | WEB-6.6 | Private join: password prompt in place | C-6.6 | ✅ | `ui/App.tsx:77-104,284-325` | live |
 | WEB-6.8 | Members rejoin without the password | C-6.8 | ✅ | `ui/App.tsx:16-31` | live; `kino.member` remembers joined screens so the password isn't asked again |
-| WEB-6.9 | Invite panel: code and links with copy | C-6.9 | 🟨 | `ui/ScreenView.tsx:615-661` | Both links with Copy; the code has no copy button |
-| WEB-6.10 | Regenerate the code | C-6.10 | 🟨 | `ui/ScreenView.tsx:650-654` | "New code" acts at once, without confirmation |
+| WEB-6.9 | Invite panel: code and links with copy | C-6.9 | 🟨 | `ui/ScreenView.tsx` (`InviteDialog`) | Code with Copy code; invite link (app or browser) and browser-only link with Copy; sharing sentence. browser test; by-hand check pending |
+| WEB-6.10 | Regenerate the code | C-6.10 | 🟨 | `ui/ScreenView.tsx` (`InviteDialog`) | Asks "Make a new code? The old code and links stop working." browser test: the new code reaches every client and the old one stops resolving; by-hand check pending |
 | WEB-6.11 | `screen.invite` controls who sees the code | C-6.11 | ⬜ |  | Spec and code disagree (Appendix B 8) · decide first |
 | WEB-6.12 | Opening invite links on each platform | C-6.12 | ✅ | `ui/App.tsx:171-186` | `#<theatre>/<code>` on load and on `hashchange`; UI: manual |
 
@@ -290,13 +290,13 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-11.16 | Late join and reconnect catch-up | C-11.16 | ✅ | `core/sync.ts:337-347` | live, e2e (within 100 ms after play and seek) |
 | WEB-11.17 | Buffering policy "Wait for everyone" | C-11.17 | ✅ | `ui/ScreenView.tsx:197-206` | Banner "Waiting for …" with Resume anyway for `playback.toggle` holders; UI: manual |
 | WEB-11.18 | Playlist transitions | C-11.18 | ✅ | `core/sync.ts:328-335` | unit (`a shorter copy waits at its end without seek loops`) |
-| WEB-11.19 | Ready check | C-11.19 | 🟨 | `ui/ScreenView.tsx:207-217` | Can answer, can't start; no tally, countdown or result |
-| WEB-11.19.1 | Start a ready check | C-11.19.1 | ⬜ | `core/session.ts:421` (API only) | No button |
+| WEB-11.19 | Ready check | C-11.19 | 🟨 | `ui/Ready.tsx` | See sub-tasks; by-hand check pending |
+| WEB-11.19.1 | Start a ready check | C-11.19.1 | 🟨 | `ui/ScreenView.tsx` | "Ready check" in the top bar with `screen.ready_check`. browser test; by-hand check pending |
 | WEB-11.19.2 | Prompt with Ready and Not yet | C-11.19.2 | ✅ | `ui/ScreenView.tsx:207-217` | Banner with Ready and Not yet; UI: manual |
-| WEB-11.19.3 | Live tally | C-11.19.3 | ⬜ |  | Not shown |
-| WEB-11.19.4 | 30 s countdown | C-11.19.4 | ⬜ |  | Not shown |
-| WEB-11.19.5 | Result shown | C-11.19.5 | ⬜ |  | Posted only to chat, which has no UI |
-| WEB-11.20 | Personal sync offset | C-11.20 | 🟨 | `core/sync.ts:212` | unit (`shifts the target by the personal offset`); no control |
+| WEB-11.19.3 | Live tally | C-11.19.3 | 🟨 | `ui/Ready.tsx` (`readyTally`) | Among connected viewers. Unit and browser test; by-hand check pending |
+| WEB-11.19.4 | 30 s countdown | C-11.19.4 | 🟨 | `ui/Ready.tsx` | From the theatre's deadline. browser test; by-hand check pending |
+| WEB-11.19.5 | Result shown | C-11.19.5 | 🟨 | `ui/Ready.tsx` | For 5 s over the video; also in chat (from the theatre). browser test; by-hand check pending |
+| WEB-11.20 | Personal sync offset | C-11.20 | 🟨 | `ui/ScreenView.tsx` (`OffsetControl`) | ⏱ in the player bar, −2000 to +2000 ms, local only, remembered. browser test; by-hand check pending |
 | WEB-11.21 | Sync readout for the viewer | C-11.21 | ✅ | `ui/ScreenView.tsx:413-417,442-467` | Zone, drift and rate in the controls bar; UI: manual |
 | WEB-11.22 | Shared sync test vectors across engines | C-11.22 | ⬜ |  |  |
 | WEB-11.23 | Sleep, lock and background behaviour | C-11.23 | ⬜ | `core/session.ts:191` | `setInterval` ticks are throttled in background tabs (WEB-11.P1) |
@@ -409,14 +409,14 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-18.1 | Text chat with an unread count | C-18.1 | 🟨 | `ui/Chat.tsx`, `ui/ScreenView.tsx` | Chat tab; 500-character input (Enter sends, Shift+Enter new line); unread badge for others' messages while hidden; links shown as text, never fetched. browser test (`scripts/e2e.mjs`); by-hand check pending |
-| WEB-18.2 | Chat history for late joiners | C-18.2 | 🟨 | `core/session.ts`, `ui/Chat.tsx` | Shown on join, de-duplicated by id. browser test (`scripts/e2e.mjs`); by-hand check pending |
-| WEB-18.3 | Emoji reactions | C-18.3 | 🟨 | `ui/Chat.tsx`, `ui/ScreenView.tsx` | See WEB-18.3.1 and WEB-18.3.2; by-hand check pending |
-| WEB-18.3.1 | Send a reaction | C-18.3.1 | 🟨 | `ui/Chat.tsx` | Reaction bar (👍 ❤️ 😂 😮 😢 🔥 👏 🎉), follows `chat.react` and mute. browser test (`scripts/e2e.mjs`); by-hand check pending |
-| WEB-18.3.2 | Reactions float over the video for 3 s | C-18.3.2 | 🟨 | `ui/ScreenView.tsx`, `ui/styles.css` | 3 s with the sender's name, at most 6 at once, never stored; fades without movement under reduced motion. browser test (`scripts/e2e.mjs`); by-hand check pending |
-| WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | 🟨 | `core/chat.ts`, `ui/Chat.tsx` | Trending when empty, 24 results, pg-13; the user's own key in local storage only; only URL, size and title are sent. Unit (parse); browser test (`scripts/e2e.mjs`) when `KINO_GIPHY_KEY` is set (not in CI); by-hand check pending |
-| WEB-18.5 | Pasted GIF links | C-18.5 | 🟨 | `core/chat.ts` (`isGifLink`) | Same allow list as the theatre; no key needed. Unit and browser test (`scripts/e2e.mjs`); by-hand check pending |
-| WEB-18.6 | System messages | C-18.6 | 🟨 | `ui/Chat.tsx` | Shown in chat, centred and in italics. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.1 | Text chat with an unread count | C-18.1 | ✅ | `ui/Chat.tsx`, `ui/ScreenView.tsx` | Chat tab; 500-character input; unread badge; links shown as text. Browser test; checked by hand |
+| WEB-18.2 | Chat history for late joiners | C-18.2 | ✅ | `core/session.ts`, `ui/Chat.tsx` | Shown on join, de-duplicated by id. Browser test; checked by hand |
+| WEB-18.3 | Emoji reactions | C-18.3 | ✅ | `ui/Chat.tsx`, `ui/ScreenView.tsx` | Browser test; checked by hand |
+| WEB-18.3.1 | Send a reaction | C-18.3.1 | ✅ | `ui/Chat.tsx` | Reaction bar, follows `chat.react` and mute. Browser test; checked by hand |
+| WEB-18.3.2 | Reactions float over the video for 3 s | C-18.3.2 | ✅ | `ui/ScreenView.tsx`, `ui/styles.css` | 3 s with the sender's name, at most 6, never stored. Browser test; checked by hand |
+| WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | ✅ | `core/chat.ts`, `ui/Chat.tsx` | User's own GIPHY key in local storage only. Unit (parse); browser test with `KINO_GIPHY_KEY` (not in CI); checked by hand |
+| WEB-18.5 | Pasted GIF links | C-18.5 | ✅ | `core/chat.ts` (`isGifLink`) | Same allow list as the theatre. Unit and browser test; checked by hand |
+| WEB-18.6 | System messages | C-18.6 | ✅ | `ui/Chat.tsx` | Browser test; checked by hand |
 | WEB-18.7 | Chat permissions and muted state | C-18.7 | 🟨 | `ui/Chat.tsx` | Input, GIF button and reactions follow permissions and mute, with "You can't chat in this screen" / "You are muted in this screen"; "Slow down a little" next to the input (browser test (`scripts/e2e.mjs`)). Mute can be exercised once moderation lands (WEB-9.1) |
 
 ## WEB-19. Notices, errors and resilience
@@ -582,3 +582,4 @@ the official YouTube IFrame player with Kino's own controls (WEB-14.5); a Kino-o
 - 2026-11-25: first version, generated from the master roadmap after a full audit of the code and tests at `298c94b`.
 - 2026-11-25: order-of-work step 1 ("stop harming others' screens"): WEB-3.7 ✅, WEB-4.11 ✅; WEB-4.3, WEB-4.4, WEB-11.P1, WEB-12.10 and WEB-14.8 to 🟨 (implemented and tested automatically; the notes say what is left). Theatre fix found on the way: closes without a code are now answered with 1000, so clients no longer wait about 10 s for the closing handshake.
 - 2026-11-25: step 1 checked by hand (media keys, 30 minutes in a hidden tab): WEB-11.P1 ✅, WEB-12.10 ✅. Step 2 (chat, reactions, GIFs, system messages): WEB-18.1 to WEB-18.7 implemented with automated browser tests; 🟨 until checked by hand.
+- 2026-11-25: chat checked by hand (WEB-18.1 to WEB-18.6 ✅; WEB-18.7 waits for moderation). Step 3 (running a screen: settings, close, ready check, personal offset, invite panel, pasted links): implemented with unit and browser tests; 🟨 until checked by hand.

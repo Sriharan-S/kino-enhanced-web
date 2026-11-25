@@ -162,7 +162,8 @@ export function App() {
     (reason?: string) => {
       session?.s.dispose();
       setSession(null);
-      if (reason) setMessage(describeError(reason, reason));
+      const said = session?.s.finalMessage;
+      if (reason) setMessage(said ? `${said.charAt(0).toUpperCase()}${said.slice(1)}.` : describeError(reason, reason));
       history.replaceState(null, "", `${location.pathname}${location.search}`);
     },
     [session],
@@ -215,7 +216,12 @@ export function App() {
           name={name}
           onRename={() => setPending({ kind: "name", then: () => {} })}
           onJoin={(api, screen) => joinResolved(api, screen, null)}
-          onJoinCode={(code) => void joinCode(code)}
+          onJoinCode={(text) => {
+            // A pasted invite link joins that screen on that theatre; a typed code ignores spaces and dashes (C-6.2).
+            const invite = parseInvite(text);
+            if (invite) void joinCode(invite.code, invite.theatreId);
+            else void joinCode(text.replace(/[s-]/g, ""));
+          }}
           onCreate={create}
           message={message}
           onDismissMessage={() => setMessage(null)}

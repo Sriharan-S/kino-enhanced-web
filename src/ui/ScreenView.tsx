@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTORY_JOIN, youTubeId, youTubeWatchUrl } from "../core/media";
-import type { TheatreEntry } from "../core/net";
+import { load, store, type TheatreEntry } from "../core/net";
 import { expectedAt, type Item, Permissions, type ServerError, type ViewerInfo } from "../core/protocol";
 import type { ScreenSession } from "../core/session";
 import { MediaController } from "../player/controller";
 import type { Html5Playback } from "../player/html5";
 import { Dialog, describeError, formatTime, useSubscribe } from "./common";
 import { ChatPanel } from "./Chat";
+import { ReadyBanner } from "./Ready";
+import { SettingsDialog } from "./Settings";
 import { bindMediaSession } from "./mediaSession";
 import { MAX_FLOATING_REACTIONS, REACTION_MS } from "../core/chat";
 
@@ -38,11 +40,15 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const [blocked, setBlocked] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useSubscribe(s.changed);
+
+  // The remembered personal offset applies from the start (C-11.20).
+  useMemo(() => (s.engine.personalOffsetMs = savedOffset()), [s]);
 
   useEffect(() => {
     controller.onChange = () => setVersion((v) => v + 1);
@@ -171,9 +177,6 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   };
 
   const hold = s.hold;
-  const ready = s.ready;
-  const self = s.self;
-  const myReady = ready && self ? ready.answers[self.id] : undefined;
 
   return (
     <div className="screen">
@@ -203,6 +206,19 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
             </span>
           )}
           <span className="spacer" />
+          {s.can(Permissions.ReadyCheck) && (
+            <button
+              className="btn small"
+              disabled={!!s.ready && !s.ready.done}
+              onClick={s.startReadyCheck}
+              title="Ask everyone if they're ready"
+            >
+              Ready check
+            </button>
+          )}
+          <button className="btn small" onClick={() => setSettingsOpen(true)}>
+            Settings
+          </button>
           <button className="btn small" onClick={() => setInviteOpen(true)}>
             Invite
           </button>
@@ -222,17 +238,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
               )}
             </div>
           )}
-          {ready && !ready.done && (
-            <div className="banner" style={{ top: hold?.length ? 60 : 12 }}>
-              <span>Ready check from {ready.by}</span>
-              <button className={`btn small ${myReady === true ? "primary" : ""}`} onClick={() => s.answerReady(ready.id, true)}>
-                Ready
-              </button>
-              <button className={`btn small ${myReady === false ? "primary" : ""}`} onClick={() => s.answerReady(ready.id, false)}>
-                Not yet
-              </button>
-            </div>
-          )}
+          <ReadyBanner session={s} top={hold?.length ? 60 : 12} />
 
           {!item ? (
             <div className="overlay">
@@ -377,6 +383,7 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
         </div>
       </aside>
 
+      {settingsOpen && s.screen && <SettingsDialog session={s} onClose={() => setSettingsOpen(false)} />}
       {inviteOpen && <InviteDialog session={s} theatre={theatre} onClose={() => setInviteOpen(false)} />}
       {linkOpen && (
         <LinkDialog
@@ -469,11 +476,78 @@ function Controls(props: {
           }}
           aria-label="Volume"
         />
+        <OffsetControl session={s} />
         <button className="btn icon ghost" onClick={props.onFullscreen} title="Fullscreen (f)">
           ⛶
         </button>
       </div>
     </div>
+  );
+}
+
+const OFFSET_KEY = "kino.offsetMs";
+
+/** The remembered personal offset (ms), clamped to ±2000. */
+export function savedOffset(): number {
+  const n = Number(load(OFFSET_KEY));
+  return Number.isFinite(n) ? Math.max(-2000, Math.min(2000, Math.round(n))) : 0;
+}
+
+/** Personal sync offset (C-11.20): local only, never sent; positive plays later (for Bluetooth delay). */
+function OffsetControl({ session: s }: { session: ScreenSession }) {
+  const [open, setOpen] = useState(false);
+  const [ms, setMs] = useState(s.engine.personalOffsetMs);
+  const apply = (v: number) => {
+    const clamped = Math.max(-2000, Math.min(2000, Math.round(v)));
+    setMs(clamped);
+    s.engine.personalOffsetMs = clamped;
+    store(OFFSET_KEY, clamped === 0 ? null : String(clamped));
+  };
+  return (
+    <span className="offset">
+      <button
+        className={`btn icon ghost ${ms !== 0 ? "on" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Personal sync offset"
+        aria-expanded={open}
+      >
+        ⏱{ms !== 0 ? ` ${ms > 0 ? "+" : ""}${ms}` : ""}
+      </button>
+      {open && (
+        <div className="offset-pop card" role="dialog" aria-label="Personal sync offset">
+          <div className="row">
+            <strong className="small">Personal sync offset</strong>
+            <span className="spacer" />
+            <span className="mono small">
+              {ms > 0 ? "+" : ""}
+              {ms} ms
+            </span>
+          </div>
+          <input
+            type="range"
+            min={-2000}
+            max={2000}
+            step={10}
+            value={ms}
+            onChange={(e) => apply(Number(e.target.value))}
+            aria-label="Offset in milliseconds"
+          />
+          <p className="muted small">Only for you, never sent. Plus plays later (for example to match Bluetooth headphones).</p>
+          <div className="row">
+            <button className="btn small" onClick={() => apply(ms - 50)}>
+              −50
+            </button>
+            <button className="btn small" onClick={() => apply(ms + 50)}>
+              +50
+            </button>
+            <span className="spacer" />
+            <button className="btn small" disabled={ms === 0} onClick={() => apply(0)}>
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -651,45 +725,80 @@ function Playlist({
 }
 
 function InviteDialog({ session: s, theatre, onClose }: { session: ScreenSession; theatre: TheatreEntry; onClose: () => void }) {
-  const link = `${location.origin}/#${theatre.id}/${s.code}`;
-  const appLink = `${DIRECTORY_JOIN}#${theatre.id}/${s.code}`;
+  const invite = `${DIRECTORY_JOIN}#${theatre.id}/${s.code}`; // opens the app, or the browser
+  const browser = `${location.origin}/#${theatre.id}/${s.code}`;
+  const isPrivate = s.screen?.visibility === "private";
+  const sentence = `Join my screen on Kino: ${invite} (code ${s.code})${isPrivate ? ", ask me for the password" : ""}`;
   const [copied, setCopied] = useState<string | null>(null);
-  const copy = (text: string) =>
+  const [confirmNew, setConfirmNew] = useState(false);
+  const copy = (key: string, text: string) =>
     void navigator.clipboard.writeText(text).then(
-      () => setCopied(text),
+      () => setCopied(key),
       () => setCopied(null),
     );
+  const copyButton = (key: string, text: string, label = "Copy") => (
+    <button type="button" className="btn" onClick={() => copy(key, text)}>
+      {copied === key ? "Copied" : label}
+    </button>
+  );
   return (
     <Dialog title="Invite people" onClose={onClose}>
       <p className="muted small">Screen code</p>
-      <p className="mono" style={{ fontSize: "2rem", letterSpacing: "0.14em", margin: "0 0 8px" }}>
-        {s.code}
-      </p>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <span className="mono" style={{ fontSize: "2rem", letterSpacing: "0.14em" }}>
+          {s.code}
+        </span>
+        <span className="spacer" />
+        {copyButton("code", s.code, "Copy code")}
+      </div>
       <label className="field">
-        Watch in the browser
+        Invite link (opens the Kino app, or the browser)
         <div className="row">
-          <input className="input" readOnly value={link} onFocus={(e) => e.target.select()} />
-          <button className="btn" onClick={() => copy(link)}>
-            {copied === link ? "Copied" : "Copy"}
-          </button>
+          <input className="input" readOnly value={invite} onFocus={(e) => e.target.select()} />
+          {copyButton("invite", invite)}
         </div>
       </label>
       <label className="field">
-        Open in the Kino app
+        Browser-only link
         <div className="row">
-          <input className="input" readOnly value={appLink} onFocus={(e) => e.target.select()} />
-          <button className="btn" onClick={() => copy(appLink)}>
-            {copied === appLink ? "Copied" : "Copy"}
-          </button>
+          <input className="input" readOnly value={browser} onFocus={(e) => e.target.select()} />
+          {copyButton("browser", browser)}
         </div>
       </label>
-      {s.screen?.visibility === "private" && <p className="muted small">This screen is private: people also need its password.</p>}
+      <label className="field">
+        Message to share
+        <div className="row">
+          <input className="input" readOnly value={sentence} onFocus={(e) => e.target.select()} />
+          {copyButton("sentence", sentence)}
+        </div>
+      </label>
+      {isPrivate && <p className="muted small">This screen is private: people also need its password.</p>}
       <div className="actions">
-        {s.can(Permissions.ScreenInvite) && (
-          <button className="btn" onClick={s.regenerateCode} title="Old links stop working">
-            New code
-          </button>
-        )}
+        {s.can(Permissions.ScreenInvite) &&
+          (confirmNew ? (
+            <>
+              <span className="small">Make a new code? The old code and links stop working.</span>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => {
+                  s.regenerateCode();
+                  setConfirmNew(false);
+                  setCopied(null);
+                }}
+              >
+                New code
+              </button>
+              <button type="button" className="btn" onClick={() => setConfirmNew(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn" onClick={() => setConfirmNew(true)}>
+              New code…
+            </button>
+          ))}
+        <span className="spacer" />
         <button className="btn primary" onClick={onClose}>
           Done
         </button>

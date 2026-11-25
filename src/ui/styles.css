@@ -246,7 +246,7 @@ label.check {
   align-items: center;
 }
 .lobby-actions .code-input {
-  width: 9.5em;
+  width: 14em;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-family: ui-monospace, Consolas, monospace;
@@ -731,4 +731,41 @@ label.check {
       opacity: 0;
     }
   }
+}
+
+/* ---- Settings, offset ---- */
+
+fieldset.plain {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.dialog .actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.offset {
+  position: relative;
+}
+.offset .btn.on {
+  color: var(--accent);
+}
+.offset-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 280px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+.offset-pop input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.offset-pop p {
+  margin: 0;
 }
