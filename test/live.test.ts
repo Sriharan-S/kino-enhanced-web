@@ -1,6 +1,6 @@
 // End-to-end against a real theatre: KINO_THEATRE=http://127.0.0.1:8787 npm test
 // (start one with `npx wrangler dev` in the main repo's theatre/). Skipped when KINO_THEATRE isn't set.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DeviceIdentity } from "../src/core/identity";
 import { TheatreApi, TheatreError } from "../src/core/net";
 import { expectedAt } from "../src/core/protocol";
@@ -175,6 +175,27 @@ describe.skipIf(!api)("live theatre", () => {
       host.dispose();
       hp.stop();
       vp.stop();
+    }
+  });
+
+  it("a long gap between ticks (sleep, frozen tab) runs a full clock burst (C-11.23)", { timeout: 30_000 }, async () => {
+    const { session: host } = await ScreenSession.create(
+      api!,
+      await identity(),
+      new SimPlayer(),
+      { name: "web gap test", visibility: "public" },
+      "Host",
+    );
+    try {
+      const internals = host as unknown as { lastTick: number; pingBurst(n: number): Promise<void> };
+      const burst = vi.spyOn(internals, "pingBurst");
+      internals.lastTick -= 10_000; // as if the device slept for 10 s
+      await waitFor(() => burst.mock.calls.length > 0, 3000);
+      expect(burst.mock.calls[0]![0]).toBe(8);
+      await sleep(1500);
+      expect(host.clock.isSynced).toBe(true);
+    } finally {
+      host.dispose();
     }
   });
 

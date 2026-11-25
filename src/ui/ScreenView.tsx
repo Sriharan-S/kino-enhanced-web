@@ -6,7 +6,9 @@ import type { ScreenSession } from "../core/session";
 import { MediaController } from "../player/controller";
 import type { Html5Playback } from "../player/html5";
 import { Dialog, describeError, formatTime, useSubscribe } from "./common";
+import { ChatPanel } from "./Chat";
 import { bindMediaSession } from "./mediaSession";
+import { MAX_FLOATING_REACTIONS, REACTION_MS } from "../core/chat";
 
 interface Props {
   session: ScreenSession;
@@ -27,7 +29,11 @@ const STATUS_TEXT: Record<string, string> = {
 export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
   const controller = useMemo(() => new MediaController(s, playback), [s, playback]);
   const [, setVersion] = useState(0);
-  const [tab, setTab] = useState<"viewers" | "playlist">("viewers");
+  const [tab, setTab] = useState<"viewers" | "playlist" | "chat">("viewers");
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const [unread, setUnread] = useState(0);
+  const [floating, setFloating] = useState<{ id: number; name: string; emoji: string; left: number }[]>([]);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
   const [blocked, setBlocked] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -63,7 +69,16 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
     const offs = [
       s.closed.on((reason) => onLeave(reason)),
       s.error.on((e: ServerError) => toast(describeError(e.code, e.message))),
-      s.reaction.on((r) => toast(`${r.name} ${r.emoji}`)),
+      // Reactions float over the video for 3 s, at most 6 at once, and are never stored (C-18.3.2).
+      s.reaction.on((r) => {
+        const id = Math.random();
+        setFloating((f) => [...f.slice(-(MAX_FLOATING_REACTIONS - 1)), { id, name: r.name, emoji: r.emoji, left: 8 + Math.random() * 70 }]);
+        setTimeout(() => setFloating((f) => f.filter((x) => x.id !== id)), REACTION_MS);
+      }),
+      // Unread messages from others while the Chat tab is hidden (C-18.1).
+      s.chatReceived.on((m) => {
+        if (tabRef.current !== "chat" && m.kind !== "system" && m.from !== s.self?.id) setUnread((n) => n + 1);
+      }),
     ];
     const onPlaying = () => setBlocked(false);
     playback.video.addEventListener("playing", onPlaying);
@@ -298,6 +313,14 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
               <h3>Drop to {controller.currentNeedsFile ? "use as your copy" : canAdd ? "add to the playlist" : "match files"}</h3>
             </div>
           )}
+          <div className="reactions-layer" aria-hidden="true">
+            {floating.map((r) => (
+              <div key={r.id} className="float-reaction" style={{ left: `${r.left}%` }}>
+                <span className="emoji">{r.emoji}</span>
+                <span className="who">{r.name}</span>
+              </div>
+            ))}
+          </div>
           <div className="toast-stack">
             {toasts.map((t) => (
               <div key={t.id} className="toast">
@@ -326,8 +349,20 @@ export function ScreenView({ session: s, theatre, playback, onLeave }: Props) {
           <button className={tab === "playlist" ? "active" : ""} onClick={() => setTab("playlist")}>
             Playlist ({s.playlist.length})
           </button>
+          <button
+            className={tab === "chat" ? "active" : ""}
+            onClick={() => {
+              setTab("chat");
+              setUnread(0);
+            }}
+          >
+            Chat{unread > 0 && <span className="unread">{unread > 99 ? "99+" : unread}</span>}
+          </button>
         </div>
-        <div className="side-body">
+        <div className="side-body chat-body" style={{ display: tab === "chat" ? undefined : "none" }}>
+          <ChatPanel session={s} active={tab === "chat"} />
+        </div>
+        <div className="side-body" style={{ display: tab === "chat" ? "none" : undefined }}>
           {tab === "viewers" ? (
             <Viewers session={s} />
           ) : (

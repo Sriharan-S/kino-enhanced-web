@@ -148,6 +148,92 @@ try {
   const title = await host.evaluate(() => navigator.mediaSession?.metadata?.title ?? null);
   check(title === "Test Clip.webm", `media session shows the current item (${title})`);
 
+  // Chat (C-18): a message from the host shows as unread for the viewer, then in their Chat tab.
+  await host.getByRole("button", { name: /^Chat/ }).click();
+  await host.getByLabel("Chat message").fill("hello from the host");
+  await host.getByLabel("Chat message").press("Enter");
+  const badge = await viewer
+    .locator(".tabs .unread")
+    .textContent({ timeout: 10_000 })
+    .catch(() => null);
+  check(badge === "1", `viewer's Chat tab shows 1 unread (${badge})`);
+  await viewer.getByRole("button", { name: /^Chat/ }).click();
+  const got = await viewer
+    .locator(".msg .text", { hasText: "hello from the host" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(got, "viewer sees the host's message");
+  check((await viewer.locator(".tabs .unread").count()) === 0, "opening Chat clears the unread count");
+  const history = await viewer.locator(".msg.system", { hasText: "Now playing" }).count();
+  check(history > 0, "a late joiner sees messages from before they joined (history)");
+  const systemCount = await host.locator(".msg.system").count();
+  check(systemCount > 0, `system messages are shown (${systemCount})`);
+
+  // A pasted GIF link is sent as a GIF, without a GIPHY key (C-18.5).
+  await viewer.getByLabel("Chat message").fill("https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif");
+  await viewer.getByLabel("Chat message").press("Enter");
+  const gifShown = await host
+    .locator(".msg img.gif")
+    .waitFor({ state: "attached", timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(gifShown, "a pasted GIF link arrives as a GIF");
+
+  // A reaction floats over everyone's video (C-18.3).
+  await viewer.getByTitle("React 🎉").click();
+  const floated = await host
+    .locator(".float-reaction", { hasText: "🎉" })
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(floated, "a reaction floats over the host's video");
+  if (shots) await host.screenshot({ path: join(shots, "e2e-chat.png") });
+
+  // Over the chat limit (5 messages per 5 s), the notice shows next to the input (C-18.7).
+  for (let i = 1; i <= 6; i++) {
+    await host.getByLabel("Chat message").fill(`quick ${i}`);
+    await host.getByLabel("Chat message").press("Enter");
+  }
+  const slow = await host
+    .locator(".chat-notice", { hasText: "Slow down" })
+    .waitFor({ timeout: 5000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(slow, 'going over the chat limit shows "Slow down a little" in the chat panel');
+  await sleep(5500); // let the window pass before the next chat action
+
+  // GIF search with the user's own GIPHY key (C-18.4); only when a key is provided.
+  if (process.env.KINO_GIPHY_KEY) {
+    await host.getByRole("button", { name: "GIF", exact: true }).click();
+    await host.getByPlaceholder("GIPHY API key").fill(process.env.KINO_GIPHY_KEY);
+    await host.locator(".gif-picker").getByRole("button", { name: "Save" }).click();
+    const first = host.locator(".gif-cell").first();
+    const found = await first.waitFor({ timeout: 15_000 }).then(
+      () => true,
+      () => false,
+    );
+    check(found, "GIPHY trending results appear in the picker");
+    if (found) {
+      await first.click();
+      const two = await viewer
+        .waitForFunction(() => document.querySelectorAll(".msg img.gif").length >= 2, null, { timeout: 10_000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      check(two, "a GIF picked from search reaches the viewer");
+    }
+  } else console.log("     (GIF search skipped: set KINO_GIPHY_KEY to test it)");
+
   // YouTube doesn't play in the web client yet, so web viewers report it ended at once and the screen moves on to the
   // next item by itself instead of waiting forever (C-14.8).
   await host.getByRole("button", { name: /^Playlist/ }).click();

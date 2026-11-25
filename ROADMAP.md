@@ -24,7 +24,7 @@ each one lives in this repo, what tests cover it, the web-only work, and the pla
 - **Tests.** "unit" is Vitest in `test/`; "live" is `test/live.test.ts` against a theatre (`KINO_THEATRE`); "e2e" is
   `scripts/e2e.mjs` (two headless Chrome profiles); "UI: manual" means checked by hand only.
 
-Rows: ✅ 112 · 🟨 34 · ⬜ 141 · ⏸ 3 (every row below, platform-only items and the design phase included).
+Rows: ✅ 114 · 🟨 38 · ⬜ 135 · ⏸ 3 (every row below, platform-only items and the design phase included).
 
 Audited on 2026-11-25 at commit `298c94b`.
 
@@ -300,7 +300,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-11.21 | Sync readout for the viewer | C-11.21 | ✅ | `ui/ScreenView.tsx:413-417,442-467` | Zone, drift and rate in the controls bar; UI: manual |
 | WEB-11.22 | Shared sync test vectors across engines | C-11.22 | ⬜ |  |  |
 | WEB-11.23 | Sleep, lock and background behaviour | C-11.23 | ⬜ | `core/session.ts:191` | `setInterval` ticks are throttled in background tabs (WEB-11.P1) |
-| WEB-11.P1 | Keep the engine ticking in background tabs | Platform-only (C-11.23) | 🟨 | `core/ticker.ts`, `core/ticker.worker.ts`, `core/session.ts` (`tick`) | Ticks come from a dedicated worker (falls back to `setInterval`); the engine step is capped at 1 s; a gap over 3 s runs a full clock burst. Verified the worker loads under the production CSP. Still to do: the 30-minute hidden-tab check (C-11.23 AC 2) by hand, and an automated gap test |
+| WEB-11.P1 | Keep the engine ticking in background tabs | Platform-only (C-11.23) | ✅ | `core/ticker.ts`, `core/ticker.worker.ts`, `core/session.ts` (`tick`) | Ticks come from a dedicated worker (falls back to `setInterval`); the engine step is capped at 1 s; a gap over 3 s runs a full clock burst (live test `a long gap between ticks`). Worker loads under the production CSP. 30 minutes hidden checked by hand |
 
 ## WEB-12. Media player
 
@@ -315,7 +315,7 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 | WEB-12.7 | Keyboard shortcuts | C-12.7 | 🟨 | `ui/ScreenView.tsx:111-130` | Space/K, ←/→, J/L, M, F; missing ↑/↓, N/P and Home; ignored while typing or with Ctrl, Alt or Meta |
 | WEB-12.8 | Touch gestures | C-12.8 | ⬜ |  | Not built |
 | WEB-12.9 | Buffering and end-of-file detection | C-12.9 | ✅ | `player/html5.ts:30-33` | `seeking`, or `readyState < HAVE_FUTURE_DATA` while playing |
-| WEB-12.10 | System media controls go through the screen | C-12.10 | 🟨 | `ui/mediaSession.ts` | Media Session: play, pause, stop, next, previous, seek forward/back and seek-to go through the screen with the same permissions; metadata shows the item and screen. Browser test checks the metadata. Media keys not yet tried by hand |
+| WEB-12.10 | System media controls go through the screen | C-12.10 | ✅ | `ui/mediaSession.ts` | Media Session: play, pause, stop, next, previous, seek forward/back and seek-to go through the screen with the same permissions; metadata shows the item and screen. Browser test checks the metadata; media keys checked by hand |
 | WEB-12.11 | Keep the display awake while playing | C-12.11 | ⬜ |  | No Wake Lock |
 | WEB-12.P1 | Autoplay policy: "Click to start" when the browser blocks playback | Platform-only | ✅ | `player/html5.ts:41-43`, `ui/ScreenView.tsx:274-280` | UI: manual |
 | WEB-12.P2 | Phone and tablet browsers | Platform-only | ⬜ | `ui/styles.css:535-550` | iOS Safari: `volume` is read-only (hide the slider), only the `<video>` can go fullscreen (`webkitEnterFullscreen`), a tap is needed for sound; Android Chrome; layouts from 320 px |
@@ -409,15 +409,15 @@ Each step is shippable on its own; the cross-platform test (WEB-21.7) runs after
 
 | ID | Task | Common | Status | Where | Tests / notes |
 |---|---|---|---|---|---|
-| WEB-18.1 | Text chat with an unread count | C-18.1 | ⬜ |  |  |
-| WEB-18.2 | Chat history for late joiners | C-18.2 | 🟨 | `core/session.ts:254,334-338` | Kept in `session.chat`, never shown |
-| WEB-18.3 | Emoji reactions | C-18.3 | 🟨 | `ui/ScreenView.tsx:64` | Receiving only, as toasts; no reaction bar |
-| WEB-18.3.1 | Send a reaction | C-18.3.1 | ⬜ |  |  |
-| WEB-18.3.2 | Reactions float over the video for 3 s | C-18.3.2 | 🟨 | `ui/ScreenView.tsx:64` | A toast "Alice 🎉" |
-| WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | ⬜ |  |  |
-| WEB-18.5 | Pasted GIF links | C-18.5 | ⬜ |  |  |
-| WEB-18.6 | System messages | C-18.6 | ⬜ |  |  |
-| WEB-18.7 | Chat permissions and muted state | C-18.7 | ⬜ |  |  |
+| WEB-18.1 | Text chat with an unread count | C-18.1 | 🟨 | `ui/Chat.tsx`, `ui/ScreenView.tsx` | Chat tab; 500-character input (Enter sends, Shift+Enter new line); unread badge for others' messages while hidden; links shown as text, never fetched. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.2 | Chat history for late joiners | C-18.2 | 🟨 | `core/session.ts`, `ui/Chat.tsx` | Shown on join, de-duplicated by id. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.3 | Emoji reactions | C-18.3 | 🟨 | `ui/Chat.tsx`, `ui/ScreenView.tsx` | See WEB-18.3.1 and WEB-18.3.2; by-hand check pending |
+| WEB-18.3.1 | Send a reaction | C-18.3.1 | 🟨 | `ui/Chat.tsx` | Reaction bar (👍 ❤️ 😂 😮 😢 🔥 👏 🎉), follows `chat.react` and mute. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.3.2 | Reactions float over the video for 3 s | C-18.3.2 | 🟨 | `ui/ScreenView.tsx`, `ui/styles.css` | 3 s with the sender's name, at most 6 at once, never stored; fades without movement under reduced motion. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.4 | GIF search (GIPHY, key kept on the device) | C-18.4 | 🟨 | `core/chat.ts`, `ui/Chat.tsx` | Trending when empty, 24 results, pg-13; the user's own key in local storage only; only URL, size and title are sent. Unit (parse); browser test (`scripts/e2e.mjs`) when `KINO_GIPHY_KEY` is set (not in CI); by-hand check pending |
+| WEB-18.5 | Pasted GIF links | C-18.5 | 🟨 | `core/chat.ts` (`isGifLink`) | Same allow list as the theatre; no key needed. Unit and browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.6 | System messages | C-18.6 | 🟨 | `ui/Chat.tsx` | Shown in chat, centred and in italics. browser test (`scripts/e2e.mjs`); by-hand check pending |
+| WEB-18.7 | Chat permissions and muted state | C-18.7 | 🟨 | `ui/Chat.tsx` | Input, GIF button and reactions follow permissions and mute, with "You can't chat in this screen" / "You are muted in this screen"; "Slow down a little" next to the input (browser test (`scripts/e2e.mjs`)). Mute can be exercised once moderation lands (WEB-9.1) |
 
 ## WEB-19. Notices, errors and resilience
 
@@ -581,3 +581,4 @@ the official YouTube IFrame player with Kino's own controls (WEB-14.5); a Kino-o
 
 - 2026-11-25: first version, generated from the master roadmap after a full audit of the code and tests at `298c94b`.
 - 2026-11-25: order-of-work step 1 ("stop harming others' screens"): WEB-3.7 ✅, WEB-4.11 ✅; WEB-4.3, WEB-4.4, WEB-11.P1, WEB-12.10 and WEB-14.8 to 🟨 (implemented and tested automatically; the notes say what is left). Theatre fix found on the way: closes without a code are now answered with 1000, so clients no longer wait about 10 s for the closing handshake.
+- 2026-11-25: step 1 checked by hand (media keys, 30 minutes in a hidden tab): WEB-11.P1 ✅, WEB-12.10 ✅. Step 2 (chat, reactions, GIFs, system messages): WEB-18.1 to WEB-18.7 implemented with automated browser tests; 🟨 until checked by hand.
