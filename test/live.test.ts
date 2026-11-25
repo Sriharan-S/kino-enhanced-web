@@ -5,6 +5,7 @@ import { DeviceIdentity } from "../src/core/identity";
 import { TheatreApi, TheatreError } from "../src/core/net";
 import { expectedAt } from "../src/core/protocol";
 import { ScreenSession } from "../src/core/session";
+import { DEFAULT_SETTINGS } from "../src/core/sync";
 import { SimPlayer } from "./sim";
 
 const url = process.env.KINO_THEATRE;
@@ -69,12 +70,12 @@ describe.skipIf(!api)("live theatre", () => {
         await sleep(3000);
         expect(hp.p.paused).toBe(false);
         expect(vp.p.paused).toBe(false);
-        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
 
         host.seek(120);
         await waitFor(() => (host.engine.anchor?.position ?? 0) >= 120);
         await sleep(2500);
-        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+        expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
         expect(hp.p.pos).toBeGreaterThan(120);
 
         host.pause();
@@ -169,7 +170,7 @@ describe.skipIf(!api)("live theatre", () => {
       host.seek(200); // anchors still reach the reconnected viewer
       await waitFor(() => (viewer.engine.anchor?.position ?? 0) >= 200);
       await sleep(2500);
-      expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(0.15);
+      expect(Math.abs(hp.p.pos - vp.p.pos)).toBeLessThan(DEFAULT_SETTINGS.enterCorrection); // the engine leaves drift under 0.25 s alone
     } finally {
       viewer.dispose();
       host.dispose();
